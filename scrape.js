@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 
 const URL = `https://tuboleto.cultura.pe/${process.env.TICKET || 'llaqta_machupicchu'}`;
-const CIRCUITS = (process.env.CIRCUITS || 'Circuito 2').split('|');   // ej "Circuito 1|Circuito 2|Circuito 3"
+const CIRCUITS = (process.env.CIRCUITS || 'Circuito 1|Circuito 2|Circuito 3').split('|');
 const MONTHS = parseInt(process.env.MONTHS || '7');
 const DAY_WAIT = 3500;
 
