@@ -1,0 +1,9 @@
+{
+  "name": "machu-picchu-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Robot que captura la disponibilidad de Machu Picchu del sitio oficial",
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
