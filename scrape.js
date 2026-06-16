@@ -1,12 +1,10 @@
-// Robot Machu Picchu — v5 (sigiloso + gentil)
-// Se disfraza de navegador normal, va lento y pide poco, para evitar el anti-bot.
+// Robot Machu Picchu — v6 (disparar consulta con metodo correcto + probar Ruta 2-A)
 const { chromium } = require('playwright');
 const fs = require('fs');
 
 const TICKET = process.env.TICKET || 'llaqta_machupicchu';
 const URL = `https://tuboleto.cultura.pe/disponibilidad/${TICKET}`;
 
-// Hook de captura + mascara de automatizacion (corre ANTES que los scripts del sitio)
 const INIT = `
 (() => {
   try {
@@ -30,92 +28,93 @@ const INIT = `
 const log = (...a) => console.log(...a);
 const out = { when: new Date().toISOString(), url: URL };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const getCap = (page) => page.evaluate(() => window.__cap || []);
+const findFechas = (c) => c.find(o => Array.isArray(o) && o[0] && o[0].dfecha);
+const findHor = (c) => c.find(o => Array.isArray(o) && o[0] && o[0].dhora_ini);
 
 (async () => {
-  log('======= v5 sigiloso Machu Picchu =======');
-  const browser = await chromium.launch({
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled', '--disable-features=IsolateOrigins,site-per-process']
-  });
+  log('======= v6 Machu Picchu =======');
+  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
-    locale: 'es-PE', timezoneId: 'America/Lima',
-    viewport: { width: 1366, height: 768 },
+    locale: 'es-PE', timezoneId: 'America/Lima', viewport: { width: 1366, height: 768 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     extraHTTPHeaders: { 'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8' }
   });
   const page = await ctx.newPage();
   await page.addInitScript(INIT);
+  try { await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 }); } catch (e) { log('goto:', e.message); }
 
-  try { await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 }); }
-  catch (e) { log('goto aviso:', e.message); }
-  await sleep(2000 + Math.random() * 1500);
+  const body = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+  if (/IP restringida|comportamiento automatizado/i.test(body)) { log('\\n⛔ BLOQUEADO 403. Espera y reintenta.'); fs.writeFileSync('capture.json', JSON.stringify({ blocked: true })); await browser.close(); process.exit(0); }
 
-  // detectar bloqueo temprano
-  const early = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
-  if (/IP restringida|comportamiento automatizado|403/i.test(early)) {
-    log('\\n⛔ BLOQUEADO (403). El sitio rechazo esta IP de GitHub.');
-    log('   Texto:', early.slice(0, 200));
-    log('   -> Espera ~30-60 min y reintenta; a veces toca otra IP. (Si pasa siempre, es bloqueo del rango de GitHub.)');
-    fs.writeFileSync('capture.json', JSON.stringify({ blocked: true, text: early.slice(0, 300) }, null, 2));
-    await browser.close(); process.exit(0);
-  }
-
-  // espera a que cargue
+  // esperar listo
   let ready = false;
   for (let t = 0; t < 40; t += 2) {
-    const st = await page.evaluate(() => ({
-      hasInput: !!document.querySelector('#fecha'),
-      hasRoutes: (window.__cap || []).some(o => Array.isArray(o) && o[0] && o[0].nidCircuito),
-      txt: document.body ? document.body.innerText.length : 0
-    })).catch(() => ({}));
-    log(`   t=${t}s fecha:${st.hasInput} rutas:${st.hasRoutes} texto:${st.txt}`);
-    if (st.hasInput && st.hasRoutes) { ready = true; break; }
+    const ok = await page.evaluate(() => !!document.querySelector('#fecha')).catch(() => false);
+    if (ok) { ready = true; break; }
     await sleep(2000);
   }
+  log('[listo]:', ready);
+  if (!ready) { fs.writeFileSync('capture.json', JSON.stringify({ ready: false })); await browser.close(); process.exit(0); }
+  await sleep(2000);
 
-  if (!ready) {
-    const txt = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
-    log('\\n[!] No cargo a tiempo. Texto visible:', txt.slice(0, 250));
-    fs.writeFileSync('capture.json', JSON.stringify({ ready: false, text: txt.slice(0, 300) }, null, 2));
-    await browser.close(); process.exit(0);
+  function printFechas(label, c) {
+    const f = findFechas(c);
+    if (f) {
+      const dias = f.map(x => x.dfecha);
+      log(`   [${label}] dias disponibles: ${dias.length} | primeros: ${dias.slice(0,5).join(', ')} | ultimos: ${dias.slice(-3).join(', ')}`);
+    } else log(`   [${label}] dias disponibles: NO capturado`);
+  }
+  function printHor(label, c) {
+    const h = findHor(c);
+    if (h) { log(`   [${label}] horarios: ${h.length}`); h.forEach(x => log(`        ${x.dhora_ini}-${x.dhora_fin}  cupos ${x.ncupo_actual}/${x.ncupo}`)); }
+    else log(`   [${label}] horarios: NO`);
   }
 
-  const routeList = (await page.evaluate(() => window.__cap || [])).find(o => Array.isArray(o) && o[0] && o[0].nidCircuito);
-  log('\\n[rutas]', routeList ? routeList.map(r => `C${r.nidCircuito}R${r.nidRuta} ${r.ruta}`).join(' | ') : 'NO');
-  out.routeList = routeList || null;
+  // ---- A) poner fecha con page.fill (metodo nativo de Playwright) en ruta por defecto ----
+  log('\\n[A] ruta por defecto + fill fecha 2026-08-15');
+  await page.evaluate(() => window.__clear());
+  try { await page.fill('#fecha', '2026-08-15'); } catch (e) { log('   fill error:', e.message); }
+  await sleep(5000);
+  let c = await getCap(page); printFechas('A', c); printHor('A', c);
 
-  // probar 1 fecha (gentil) en la ruta por defecto
-  async function tryDate(d) {
-    await sleep(1500 + Math.random() * 1500);
-    const set = await page.evaluate((d) => {
-      const i = document.querySelector('#fecha'); if (!i) return 'NO-INPUT';
-      window.__clear();
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      setter.call(i, d);
-      i.dispatchEvent(new Event('input', { bubbles: true }));
-      i.dispatchEvent(new Event('change', { bubbles: true }));
-      return i.value;
-    }, d).catch(e => 'ERR');
-    await sleep(5000);
-    const c = await page.evaluate(() => window.__cap || []);
-    const hor = c.find(o => Array.isArray(o) && o[0] && o[0].dhora_ini);
-    log(`\\n[fecha ${d}] input="${set}" | horarios: ${hor ? hor.length : 'NO'}`);
-    if (hor) hor.forEach(h => log(`     ${h.dhora_ini}-${h.dhora_fin}  cupos ${h.ncupo_actual}/${h.ncupo}`));
-    return hor || null;
-  }
-  out.fecha = await tryDate('2026-08-15');
+  // ---- B) intentar seleccionar Ruta 2-A clickeando su texto, luego fill ----
+  log('\\n[B] click en "Ruta 2-A" + fechas');
+  await page.evaluate(() => window.__clear());
+  try {
+    const loc = page.getByText('2-A', { exact: false }).first();
+    if (await loc.count()) { await loc.click({ timeout: 5000 }); log('   click 2-A ok'); }
+    else log('   no encontre texto 2-A clickeable');
+  } catch (e) { log('   click 2-A error:', e.message); }
+  await sleep(4000);
+  c = await getCap(page); printFechas('B-tras-click', c);
+  // elegir una fecha disponible si la hay, si no usar 2026-10-01
+  let target = '2026-10-01';
+  const f = findFechas(c);
+  if (f && f.length) { const p = f[Math.floor(f.length / 2)].dfecha.split('-'); target = `${p[2]}-${p[1]}-${p[0]}`; }
+  log('   probando fecha:', target);
+  await page.evaluate(() => window.__clear());
+  try { await page.fill('#fecha', target); } catch (e) { log('   fill error:', e.message); }
+  await sleep(5000);
+  c = await getCap(page); printHor('B', c);
 
-  // como estan hechos los menus
-  out.selectors = await page.evaluate(() => {
-    const all = [...document.querySelectorAll('*')];
-    const pick = (re) => all.filter(e => re.test(e.textContent || '') && e.querySelectorAll('*').length <= 2)
-      .slice(0, 6).map(e => ({ tag: e.tagName, id: e.id || '', cls: (e.className || '').toString().slice(0, 70), txt: (e.textContent || '').trim().slice(0, 50) }));
-    return { circuito: pick(/Circuito [123]/), ruta: pick(/Ruta [123]-/) };
+  // ---- C) volcar elementos cercanos a #fecha y posibles selects custom ----
+  out.aroundFecha = await page.evaluate(() => {
+    const i = document.querySelector('#fecha');
+    let html = '';
+    let p = i;
+    for (let k = 0; k < 4 && p; k++) { p = p.parentElement; }
+    if (p) html = p.outerHTML.slice(0, 1500);
+    // posibles dropdowns
+    const drops = [...document.querySelectorAll('select, [role=listbox], [class*=select], [class*=dropdown]')]
+      .slice(0, 8).map(e => ({ tag: e.tagName, cls: (e.className || '').toString().slice(0, 60) }));
+    return { html, drops };
   }).catch(() => ({}));
-  log('\\n[menu circuito]'); (out.selectors.circuito || []).forEach(c => log('   ', JSON.stringify(c)));
-  log('[menu ruta]'); (out.selectors.ruta || []).forEach(c => log('   ', JSON.stringify(c)));
+  log('\\n[C] dropdowns detectados:', JSON.stringify((out.aroundFecha.drops || [])));
 
+  out.cap = await getCap(page);
   fs.writeFileSync('capture.json', JSON.stringify(out, null, 2));
   log('\\n💾 capture.json guardado.');
   await browser.close();
-  log('== fin v5 ==');
+  log('== fin v6 ==');
 })();
