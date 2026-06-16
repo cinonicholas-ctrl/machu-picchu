@@ -121,7 +121,7 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
       const id = idm ? idm[1] + idm[2] : ruta.slice(0, 6);
       const desc = ruta.includes(':') ? ruta.split(':')[1].trim() : ruta;
       const pr = prev[id] || { days: {}, slots: [], cap: 0 };
-      const route = { id, group: circuit, name: `Circuito ${id[0]}-${id[1]} · ${desc}`, slots: [], cap: pr.cap || 0, days: Object.assign({}, pr.days) };
+      const route = { id, group: circuit, name: `Circuito ${id[0]}-${id[1]} · ${desc}`, slots: [], cap: pr.cap || 0, updated: new Date().toISOString(), meses: targets.length, mesesOk: 0, days: Object.assign({}, pr.days) };
       const slotSet = new Set(pr.slots || []);
       let okMonths = 0, badMonths = 0;
       const tR = Date.now();
@@ -142,6 +142,7 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
         if (blocked) break;
       }
       route.slots = [...slotSet].sort();
+      route.mesesOk = okMonths;
       result.routes.push(route);
       // escribir merge (incluye rutas previas no tocadas)
       const seen = new Set(result.routes.map(r => r.id));
