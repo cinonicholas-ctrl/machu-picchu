@@ -24,19 +24,33 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps chromium
 
+      # Cada circuito reintenta hasta 3 veces; si falla, espera 5 min y reintenta
       - name: Circuito 1
-        run: CIRCUITS="Circuito 1" node scrape.js
         continue-on-error: true
-      - run: sleep 20
+        run: |
+          for i in 1 2 3; do
+            CIRCUITS="Circuito 1" node scrape.js && break
+            echo "Circuito 1 intento $i falló; espero 5 min y reintento..."
+            sleep 300
+          done
 
       - name: Circuito 2
-        run: CIRCUITS="Circuito 2" node scrape.js
         continue-on-error: true
-      - run: sleep 20
+        run: |
+          for i in 1 2 3; do
+            CIRCUITS="Circuito 2" node scrape.js && break
+            echo "Circuito 2 intento $i falló; espero 5 min y reintento..."
+            sleep 300
+          done
 
       - name: Circuito 3
-        run: CIRCUITS="Circuito 3" node scrape.js
         continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            CIRCUITS="Circuito 3" node scrape.js && break
+            echo "Circuito 3 intento $i falló; espero 5 min y reintento..."
+            sleep 300
+          done
 
       - name: Guardar datos en el dashboard
         if: always()
