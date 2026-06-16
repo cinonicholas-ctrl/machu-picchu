@@ -1,10 +1,15 @@
-name: Probe Machu Picchu
+name: Robot Machu Picchu
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: write
 
 jobs:
-  probe:
+  scrape:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,6 +19,13 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: node scrape.js
+      - name: Guardar datos en el dashboard
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add data.json
+          git commit -m "Actualizar disponibilidad Machu Picchu" || echo "sin cambios"
+          git push
       - uses: actions/upload-artifact@v4
         if: always()
         with:
