@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# Evita que dos corridas se pisen (una a la vez)
+concurrency:
+  group: scrape-machupicchu
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -40,7 +45,8 @@ jobs:
           git config user.email "actions@github.com"
           git add data.json
           git commit -m "Actualizar disponibilidad Machu Picchu" || echo "sin cambios"
-          git push
+          git pull --rebase -X ours origin main || true
+          git push origin main || true
 
       - uses: actions/upload-artifact@v4
         if: always()
