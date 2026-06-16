@@ -1,4 +1,4 @@
-// Robot Machu Picchu — v11: capturar HORARIOS de un dia con cupo (2-A, 15 nov)
+// Robot Machu Picchu — v12: clic robusto en el dia + abrir menu horario
 const { chromium } = require('playwright');
 const fs = require('fs');
 
@@ -16,9 +16,15 @@ const INIT = `
 const log = (...a) => console.log(...a);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const out = {};
+const dumpCap = async (page, label) => {
+  const cap = await page.evaluate(() => window.__cap || []);
+  log(`   [${label}] capturados: ${cap.length}`);
+  cap.forEach((o, i) => { if (Array.isArray(o) && o[0]) log(`      [${i}] array ${o.length} llaves:${Object.keys(o[0]).join(',')}`); });
+  return cap;
+};
 
 (async () => {
-  log('======= v11 horarios =======');
+  log('======= v12 =======');
   const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
     locale: 'es-PE', timezoneId: 'America/Lima', viewport: { width: 1366, height: 900 },
@@ -27,13 +33,11 @@ const out = {};
   });
   const page = await ctx.newPage();
   await page.addInitScript(INIT);
-
   page.on('response', (r) => { const u = r.url(); if (/consulta-|horario|tarifa/i.test(u)) log('   [red]', r.status(), u.replace('https://api-tuboleto.cultura.pe', '')); });
 
   try { await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 }); } catch (e) { log('goto:', e.message); }
   const b0 = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
   if (/IP restringida|automatizado/i.test(b0)) { log('⛔ 403, reintenta luego.'); fs.writeFileSync('capture.json', '{"blocked":true}'); await browser.close(); process.exit(0); }
-
   let ready = false;
   for (let t = 0; t < 45; t += 3) { if (await page.locator('mat-select').count().catch(() => 0) >= 2) { ready = true; break; } await sleep(3000); }
   if (!ready) { log('no listo'); fs.writeFileSync('capture.json', '{"ready":false}'); await browser.close(); process.exit(0); }
@@ -46,42 +50,50 @@ const out = {};
     await sleep(2500);
   }
   log('[1] Circuito 2 / Ruta 2-A');
-  await pick(0, 'Circuito 2'); await pick(1, '2-A'); await sleep(2000);
+  await pick(0, 'Circuito 2'); await pick(1, '2-A'); await sleep(1500);
 
-  // navegar el calendario hasta NOV 2026
   log('[2] navegar a NOV 2026');
   for (let i = 0; i < 8; i++) {
     const mes = await page.evaluate(() => { const p = document.querySelector('.mat-calendar-period-button'); return p ? p.innerText.trim() : ''; }).catch(() => '');
-    log('   mes:', mes);
-    if (/NOV/i.test(mes)) break;
+    if (/NOV/i.test(mes)) { log('   en', mes); break; }
     const next = page.locator('.mat-calendar-next-button').first();
     if (await next.count()) { await next.click().catch(() => {}); await sleep(1200); } else break;
   }
 
-  // clic en el dia 15
-  log('[3] clic en dia 15 y esperar horarios');
-  await page.evaluate(() => window.__clear());
-  try {
-    const cell = page.locator('.mat-calendar-body-cell-content', { hasText: /^15$/ }).first();
-    if (await cell.count()) { await cell.click(); log('   clic 15 ok'); } else log('   no encontre dia 15');
-  } catch (e) { log('   error clic:', e.message); }
-  await sleep(7000);
+  // listar celdas habilitadas (para confirmar formato del texto)
+  const cells = await page.evaluate(() => [...document.querySelectorAll('.mat-calendar-body-cell')].slice(0, 40).map(c => ({ t: c.innerText.trim(), dis: c.classList.contains('mat-calendar-body-disabled') })));
+  log('[3] primeras celdas:', JSON.stringify(cells.filter(c => !c.dis).slice(0, 8)));
 
-  // ver que se capturo
-  const cap = await page.evaluate(() => window.__cap || []);
-  log('\\n[4] objetos capturados:', cap.length);
-  cap.forEach((o, i) => {
-    if (Array.isArray(o) && o[0]) log(`   [${i}] array de ${o.length}, llaves del 1ro: ${Object.keys(o[0]).join(',')}`);
-    else log(`   [${i}] ${JSON.stringify(o).slice(0, 80)}`);
+  log('[4] clic en dia 15 (via DOM)');
+  await page.evaluate(() => window.__clear());
+  const clicked = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.mat-calendar-body-cell')];
+    const t = cells.find(c => c.innerText.trim() === '15' && !c.classList.contains('mat-calendar-body-disabled'));
+    if (t) { t.click(); return true; } return false;
   });
+  log('   clic 15:', clicked);
+  await sleep(6000);
+  await dumpCap(page, 'tras clic dia');
+
+  log('\\n[5] abrir menu HORARIO (mat-select 2) y ver');
+  try {
+    await page.locator('mat-select').nth(2).click({ timeout: 6000 }); await sleep(1500);
+    const opts = await page.locator('mat-option').allInnerTexts().catch(() => []);
+    log('   opciones horario:', JSON.stringify(opts));
+    out.horarioOpts = opts;
+    await page.keyboard.press('Escape');
+  } catch (e) { log('   error abrir horario:', e.message); }
+  await sleep(1500);
+  const cap = await dumpCap(page, 'tras abrir horario');
+
   const h = cap.find(o => Array.isArray(o) && o[0] && o[0].dhora_ini);
-  log('\\n[5] HORARIOS 15-nov 2-A:');
-  if (h) h.forEach(x => log(`   ${x.dhora_ini}-${x.dhora_fin}  cupos ${x.ncupo_actual}/${x.ncupo}`));
-  else log('   NO capturado (mira arriba que llamadas de red salieron)');
+  log('\\n[6] HORARIOS:');
+  if (h) h.forEach(x => log(`   ${x.dhora_ini}-${x.dhora_fin} cupos ${x.ncupo_actual}/${x.ncupo}`));
+  else log('   NO en formato dhora_ini — revisa llaves arriba / opciones de horario');
   out.cap = cap;
 
   fs.writeFileSync('capture.json', JSON.stringify(out, null, 2));
   log('\\n💾 capture.json guardado.');
   await browser.close();
-  log('== fin v11 ==');
+  log('== fin v12 ==');
 })();
