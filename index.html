@@ -85,7 +85,7 @@
 <script>
 const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set();
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), firstLoad=true;
 
 function daysIn(y,m){return new Date(y,m+1,0).getDate();}
 function pad(n){return String(n).padStart(2,'0');}
@@ -134,7 +134,13 @@ async function loadData(){
   DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
   months=[...set].sort();
   if(curIdx>=months.length) curIdx=0;
-  if(!selected.size) selected=new Set(["2A","3A"].filter(id=>DATA.routes.some(r=>r.id===id)));
+  if(!selected.size) selected=new Set(DATA.routes.slice(0,2).map(r=>r.id));
+  // al abrir, ir al primer mes que tenga algún cupo (evita caer en un mes agotado)
+  if(firstLoad){
+    const idx=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length)));
+    if(idx>=0) curIdx=idx;
+    firstLoad=false;
+  }
 }
 
 function srcBadge(){
@@ -180,8 +186,15 @@ function renderBlocks(){
     for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
     const ratio=diasCupo/nd;
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
+    // frescura por ruta
+    let fresh="";
+    if(rt.updated){
+      const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;
+      if(h<14) fresh=`<span class="pill ok">✓ actualizado hace ${h<1?'<1':Math.round(h)} h</span>`;
+      else fresh=`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;
+    }
     const b=document.createElement("div");b.className="block";
-    b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</span> ${pill}
+    b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</span> ${pill} ${fresh}
       <span class="tag">${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
