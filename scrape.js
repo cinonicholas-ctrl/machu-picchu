@@ -42,7 +42,12 @@ const daysInMonth = (y, mo) => new Date(y, mo + 1, 0).getDate();
   if (!ready) { fs.writeFileSync('capture.json', '{"ready":false}'); await browser.close(); process.exit(1); }
   await sleep(1500);
 
+  async function closeCal() {
+    if (await isOpen()) { await page.keyboard.press('Escape').catch(() => {}); await sleep(250); }
+    if (await isOpen()) { await page.locator('.cdk-overlay-backdrop').first().click({ force: true }).catch(() => {}); await sleep(250); }
+  }
   async function pickSelect(idx, contains) {
+    await closeCal();
     await page.locator('mat-select').nth(idx).click({ timeout: 8000 }); await sleep(500);
     const o = page.locator('mat-option', { hasText: contains }).first();
     const ok = await o.count(); if (ok) await o.click(); else await page.keyboard.press('Escape');
