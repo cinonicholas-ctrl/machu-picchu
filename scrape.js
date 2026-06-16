@@ -1,6 +1,7 @@
-// Probe del robot Machu Picchu — solo CARGA la pagina y captura los cupos
-// reales con el mismo truco que funciono en la consola (enganchar JSON.parse).
-// Objetivo: confirmar que GitHub Actions NO es bloqueado por el sitio.
+// Robot Machu Picchu — v2 RECONOCIMIENTO
+// Objetivo: ver como esta armada la pagina por dentro (selectores) y probar
+// navegar circuito -> ruta -> fecha para gatillar los cupos por dia/hora.
+// Captura todo con el hook JSON.parse y reporta en el log + capture.json.
 const { chromium } = require('playwright');
 const fs = require('fs');
 
@@ -15,65 +16,105 @@ const INIT = `
     const r = orig.apply(this, arguments);
     try {
       const s = JSON.stringify(r);
-      if (/fecha|cupo|dispon|hora|aforo|cantidad|stock|ncupo/i.test(s)) window.__cap.push(r);
+      if (/dfecha|dhora|ncupo|cupo|dispon/i.test(s)) window.__cap.push(r);
     } catch (e) {}
     return r;
   };
+  window.__clear = () => { window.__cap = []; };
 })();
 `;
 
-(async () => {
-  console.log('==============================================');
-  console.log(' PROBE Machu Picchu');
-  console.log(' URL:', URL);
-  console.log('==============================================');
+const log = (...a) => console.log(...a);
+const out = { when: new Date().toISOString(), url: URL, steps: [] };
+function rec(label, data) { out.steps.push({ label, data }); }
 
+(async () => {
+  log('======= RECON Machu Picchu =======');
   const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
-    locale: 'es-PE',
-    timezoneId: 'America/Lima',
+    locale: 'es-PE', timezoneId: 'America/Lima',
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   });
   const page = await ctx.newPage();
   await page.addInitScript(INIT);
 
-  const apiHits = [];
-  page.on('response', (resp) => {
-    const u = resp.url();
-    if (u.includes('api-tuboleto') || u.includes('consulta-')) apiHits.push(resp.status() + '  ' + u);
-  });
+  try { await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); }
+  catch (e) { log('goto aviso:', e.message); }
+  await page.waitForTimeout(7000);
+
+  // ---- 1) Inventario de controles ----
+  const selCount = await page.locator('mat-select').count().catch(() => -1);
+  log('\\n[1] mat-select encontrados:', selCount);
+  for (let i = 0; i < (selCount > 0 ? selCount : 0); i++) {
+    const txt = await page.locator('mat-select').nth(i).innerText().catch(() => '(?)');
+    log(`    mat-select[${i}] texto: ${JSON.stringify(txt)}`);
+  }
+  rec('mat-select-count', selCount);
+
+  // inputs (para encontrar el de fecha)
+  const inputs = await page.locator('input').elementHandles().catch(() => []);
+  log('\\n[2] inputs encontrados:', inputs.length);
+  const inputInfo = [];
+  for (let i = 0; i < inputs.length; i++) {
+    const info = await inputs[i].evaluate(el => ({
+      type: el.getAttribute('type'), placeholder: el.getAttribute('placeholder'),
+      name: el.getAttribute('name'), cls: el.className, html: el.outerHTML.slice(0, 160)
+    })).catch(() => ({}));
+    inputInfo.push(info);
+    log(`    input[${i}]:`, JSON.stringify(info));
+  }
+  rec('inputs', inputInfo);
+
+  // datepicker?
+  const tgl = await page.locator('mat-datepicker-toggle, [class*=datepicker]').count().catch(() => 0);
+  log('\\n[3] elementos tipo datepicker:', tgl);
+  rec('datepicker-count', tgl);
+
+  // ---- 4) lista de rutas (de la carga inicial) ----
+  let cap = await page.evaluate(() => window.__cap || []);
+  const routeList = cap.find(o => Array.isArray(o) && o[0] && o[0].nidCircuito);
+  log('\\n[4] lista de rutas detectada:', routeList ? routeList.length + ' rutas' : 'NO');
+  if (routeList) routeList.forEach(r => log(`    C${r.nidCircuito} R${r.nidRuta} | ${r.ruta} | ncupo ${r.ncupo} act ${r.ncupoActual}`));
+  rec('routeList', routeList || null);
+
+  // ---- 5) intentar seleccionar Circuito 2 -> Ruta 2-A ----
+  async function pickSelect(idx, contains) {
+    log(`\\n[5] abriendo mat-select[${idx}] para elegir "${contains}"...`);
+    await page.locator('mat-select').nth(idx).click({ timeout: 8000 });
+    await page.waitForTimeout(800);
+    const opts = await page.locator('mat-option').allInnerTexts().catch(() => []);
+    log('    opciones visibles:', JSON.stringify(opts));
+    rec(`options-select-${idx}`, opts);
+    const opt = page.locator('mat-option', { hasText: contains }).first();
+    if (await opt.count()) { await opt.click(); log('    -> click en opcion con', contains); }
+    else { log('    !! no encontre opcion con', contains); await page.keyboard.press('Escape'); }
+    await page.waitForTimeout(1500);
+  }
 
   try {
-    await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 });
+    await page.evaluate(() => window.__clear());
+    if (selCount >= 1) await pickSelect(0, 'Circuito 2');
+    if (selCount >= 2) await pickSelect(1, '2-A');
+    await page.waitForTimeout(3000);
+    cap = await page.evaluate(() => window.__cap || []);
+    const fechas = cap.find(o => Array.isArray(o) && o[0] && o[0].dfecha);
+    log('\\n[6] fechas-disponibles tras elegir circuito/ruta:', fechas ? fechas.length + ' dias' : 'NO capturado');
+    if (fechas) log('    primeras:', JSON.stringify(fechas.slice(0, 8)));
+    rec('fechas', fechas || null);
+    const horarios = cap.find(o => Array.isArray(o) && o[0] && o[0].dhora_ini);
+    log('    horarios capturados de una vez?:', horarios ? horarios.length : 'NO');
+    rec('horarios', horarios || null);
   } catch (e) {
-    console.log('Aviso al cargar (seguimos):', e.message);
+    log('\\n[!] error en seleccion:', e.message);
+    rec('select-error', e.message);
   }
-  await page.waitForTimeout(9000);
 
-  const cap = await page.evaluate(() => window.__cap || []);
-  let title = '';
-  try { title = await page.title(); } catch (e) {}
+  // ---- 6) volcar HTML del formulario para análisis ----
+  const formHtml = await page.locator('form, .container, app-root').first().innerHTML().catch(() => '');
+  out.formHtmlSnippet = formHtml.slice(0, 6000);
 
-  console.log('\\nTitulo de la pagina:', title);
-  console.log('Llamadas al API detectadas:', apiHits.length);
-  apiHits.slice(0, 15).forEach((h) => console.log('   ', h));
-  console.log('\\nObjetos capturados (cupos desencriptados):', cap.length);
-
-  cap.slice(0, 8).forEach((o, i) => {
-    const s = JSON.stringify(o);
-    console.log(`\\n--- captura[${i}]  (${s.length} caracteres) ---`);
-    console.log(s.slice(0, 900));
-  });
-
-  fs.writeFileSync('capture.json', JSON.stringify({ when: new Date().toISOString(), url: URL, title, apiHits, cap }, null, 2));
-  console.log('\\n💾 Guardado capture.json');
-
+  fs.writeFileSync('capture.json', JSON.stringify(out, null, 2));
+  log('\\n💾 capture.json guardado (descárgalo de Artifacts si hace falta).');
   await browser.close();
-
-  if (cap.length === 0) {
-    console.log('\\n⚠️  No se capturo nada. Posible bloqueo del sitio a GitHub, o la pagina cargo distinto.');
-    console.log('    Revisa arriba las "Llamadas al API": si hay 0, es bloqueo de red.');
-    process.exit(1);
-  }
-  console.log('\\n✅ CAPTURA OK — el robot puede leer los cupos reales desde la nube.');
+  log('\\n== fin recon ==');
 })();
