@@ -1,7 +1,7 @@
-// Robot Machu Picchu — v2 RECONOCIMIENTO
-// Objetivo: ver como esta armada la pagina por dentro (selectores) y probar
-// navegar circuito -> ruta -> fecha para gatillar los cupos por dia/hora.
-// Captura todo con el hook JSON.parse y reporta en el log + capture.json.
+// Robot Machu Picchu — v3 RECON
+// 1) Usa el campo de fecha nativo (#fecha) para pedir horarios reales de fechas concretas
+//    (default = Ruta 1-A Montaña) -> primer dato para validar contra la realidad.
+// 2) Vuelca como estan hechos los menus de circuito/ruta para poder cambiarlos luego.
 const { chromium } = require('playwright');
 const fs = require('fs');
 
@@ -14,8 +14,7 @@ const INIT = `
   window.__cap = [];
   JSON.parse = function () {
     const r = orig.apply(this, arguments);
-    try {
-      const s = JSON.stringify(r);
+    try { const s = JSON.stringify(r);
       if (/dfecha|dhora|ncupo|cupo|dispon/i.test(s)) window.__cap.push(r);
     } catch (e) {}
     return r;
@@ -23,13 +22,11 @@ const INIT = `
   window.__clear = () => { window.__cap = []; };
 })();
 `;
-
 const log = (...a) => console.log(...a);
-const out = { when: new Date().toISOString(), url: URL, steps: [] };
-function rec(label, data) { out.steps.push({ label, data }); }
+const out = { when: new Date().toISOString(), url: URL };
 
 (async () => {
-  log('======= RECON Machu Picchu =======');
+  log('======= RECON v3 Machu Picchu =======');
   const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
     locale: 'es-PE', timezoneId: 'America/Lima',
@@ -37,84 +34,56 @@ function rec(label, data) { out.steps.push({ label, data }); }
   });
   const page = await ctx.newPage();
   await page.addInitScript(INIT);
-
   try { await page.goto(URL, { waitUntil: 'networkidle', timeout: 90000 }); }
   catch (e) { log('goto aviso:', e.message); }
   await page.waitForTimeout(7000);
 
-  // ---- 1) Inventario de controles ----
-  const selCount = await page.locator('mat-select').count().catch(() => -1);
-  log('\\n[1] mat-select encontrados:', selCount);
-  for (let i = 0; i < (selCount > 0 ? selCount : 0); i++) {
-    const txt = await page.locator('mat-select').nth(i).innerText().catch(() => '(?)');
-    log(`    mat-select[${i}] texto: ${JSON.stringify(txt)}`);
-  }
-  rec('mat-select-count', selCount);
-
-  // inputs (para encontrar el de fecha)
-  const inputs = await page.locator('input').elementHandles().catch(() => []);
-  log('\\n[2] inputs encontrados:', inputs.length);
-  const inputInfo = [];
-  for (let i = 0; i < inputs.length; i++) {
-    const info = await inputs[i].evaluate(el => ({
-      type: el.getAttribute('type'), placeholder: el.getAttribute('placeholder'),
-      name: el.getAttribute('name'), cls: el.className, html: el.outerHTML.slice(0, 160)
-    })).catch(() => ({}));
-    inputInfo.push(info);
-    log(`    input[${i}]:`, JSON.stringify(info));
-  }
-  rec('inputs', inputInfo);
-
-  // datepicker?
-  const tgl = await page.locator('mat-datepicker-toggle, [class*=datepicker]').count().catch(() => 0);
-  log('\\n[3] elementos tipo datepicker:', tgl);
-  rec('datepicker-count', tgl);
-
-  // ---- 4) lista de rutas (de la carga inicial) ----
+  // ruta por defecto seleccionada
   let cap = await page.evaluate(() => window.__cap || []);
   const routeList = cap.find(o => Array.isArray(o) && o[0] && o[0].nidCircuito);
-  log('\\n[4] lista de rutas detectada:', routeList ? routeList.length + ' rutas' : 'NO');
-  if (routeList) routeList.forEach(r => log(`    C${r.nidCircuito} R${r.nidRuta} | ${r.ruta} | ncupo ${r.ncupo} act ${r.ncupoActual}`));
-  rec('routeList', routeList || null);
+  log('\\n[rutas] ', routeList ? routeList.map(r => `C${r.nidCircuito}R${r.nidRuta} ${r.ruta}`).join(' | ') : 'no');
 
-  // ---- 5) intentar seleccionar Circuito 2 -> Ruta 2-A ----
-  async function pickSelect(idx, contains) {
-    log(`\\n[5] abriendo mat-select[${idx}] para elegir "${contains}"...`);
-    await page.locator('mat-select').nth(idx).click({ timeout: 8000 });
-    await page.waitForTimeout(800);
-    const opts = await page.locator('mat-option').allInnerTexts().catch(() => []);
-    log('    opciones visibles:', JSON.stringify(opts));
-    rec(`options-select-${idx}`, opts);
-    const opt = page.locator('mat-option', { hasText: contains }).first();
-    if (await opt.count()) { await opt.click(); log('    -> click en opcion con', contains); }
-    else { log('    !! no encontre opcion con', contains); await page.keyboard.press('Escape'); }
-    await page.waitForTimeout(1500);
+  // ---- Probar el campo de fecha con varias fechas ----
+  async function tryDate(d) {
+    const set = await page.evaluate((d) => {
+      const i = document.querySelector('#fecha');
+      if (!i) return 'NO-INPUT';
+      window.__clear();
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(i, d);
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      i.dispatchEvent(new Event('change', { bubbles: true }));
+      return i.value;
+    }, d);
+    await page.waitForTimeout(5000);
+    const c = await page.evaluate(() => window.__cap || []);
+    const hor = c.find(o => Array.isArray(o) && o[0] && (o[0].dhora_ini || o[0].dhora_ini === ''));
+    log(`\\n[fecha ${d}] input quedo en "${set}" | horarios capturados: ${hor ? hor.length : 'NO'}`);
+    if (hor) hor.forEach(h => log(`     ${h.dhora_ini}-${h.dhora_fin}  cupos ${h.ncupo_actual} / ${h.ncupo}`));
+    return hor || null;
   }
 
-  try {
-    await page.evaluate(() => window.__clear());
-    if (selCount >= 1) await pickSelect(0, 'Circuito 2');
-    if (selCount >= 2) await pickSelect(1, '2-A');
-    await page.waitForTimeout(3000);
-    cap = await page.evaluate(() => window.__cap || []);
-    const fechas = cap.find(o => Array.isArray(o) && o[0] && o[0].dfecha);
-    log('\\n[6] fechas-disponibles tras elegir circuito/ruta:', fechas ? fechas.length + ' dias' : 'NO capturado');
-    if (fechas) log('    primeras:', JSON.stringify(fechas.slice(0, 8)));
-    rec('fechas', fechas || null);
-    const horarios = cap.find(o => Array.isArray(o) && o[0] && o[0].dhora_ini);
-    log('    horarios capturados de una vez?:', horarios ? horarios.length : 'NO');
-    rec('horarios', horarios || null);
-  } catch (e) {
-    log('\\n[!] error en seleccion:', e.message);
-    rec('select-error', e.message);
-  }
+  out.fechaCercana = await tryDate('2026-06-20');
+  out.fechaMedia   = await tryDate('2026-08-15');
+  out.fechaLejana  = await tryDate('2026-11-15');
 
-  // ---- 6) volcar HTML del formulario para análisis ----
-  const formHtml = await page.locator('form, .container, app-root').first().innerHTML().catch(() => '');
-  out.formHtmlSnippet = formHtml.slice(0, 6000);
+  // ---- Volcar como estan hechos los menus de circuito/ruta ----
+  const selectors = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('*')];
+    const pick = (re) => all
+      .filter(e => re.test((e.textContent || '')) && e.querySelectorAll('*').length <= 2)
+      .slice(0, 6)
+      .map(e => ({ tag: e.tagName, id: e.id || '', cls: (e.className || '').toString().slice(0, 70), txt: (e.textContent || '').trim().slice(0, 50) }));
+    return { circuito: pick(/Circuito [123]/), ruta: pick(/Ruta [123]-/) };
+  });
+  log('\\n[menu circuito] candidatos:');
+  selectors.circuito.forEach(c => log('   ', JSON.stringify(c)));
+  log('[menu ruta] candidatos:');
+  selectors.ruta.forEach(c => log('   ', JSON.stringify(c)));
+  out.selectors = selectors;
 
   fs.writeFileSync('capture.json', JSON.stringify(out, null, 2));
-  log('\\n💾 capture.json guardado (descárgalo de Artifacts si hace falta).');
+  log('\\n💾 capture.json guardado.');
   await browser.close();
-  log('\\n== fin recon ==');
+  log('\\n== fin recon v3 ==');
 })();
