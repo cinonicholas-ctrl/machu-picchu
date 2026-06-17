@@ -25,6 +25,8 @@ const daysInMonth = (y, mo) => new Date(y, mo + 1, 0).getDate();
 // cargar datos previos (para no borrar lo bueno)
 let prev = {};
 try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || []).forEach(r => prev[r.id] = r); log('prev cargado:', Object.keys(prev).join(',')); } catch (e) { log('sin prev'); }
+// limpiar meses ya pasados de lo previo (solo guardamos del mes actual en adelante)
+{ const n = new Date(); const cut = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; Object.values(prev).forEach(r => { if (r && r.days) { for (const k in r.days) { if (k.slice(0, 7) < cut) delete r.days[k]; } } }); }
 
 (async () => {
   log('======= v15 resiliente =======', CIRCUITS.join(','), 'meses:', MONTHS);
@@ -118,8 +120,9 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
   }
 
   const result = { updated: new Date().toISOString(), ticket: process.env.TICKET || 'llaqta_machupicchu', sample: false, routes: [] };
+  // del mes actual hasta diciembre de este año (cada mes que pasa, la corrida es más corta)
   const now = new Date(); const targets = [];
-  for (let m = 0; m < MONTHS; m++) { const dt = new Date(now.getFullYear(), now.getMonth() + m, 1); targets.push({ y: dt.getFullYear(), mo: dt.getMonth() }); }
+  for (let mo = now.getMonth(); mo <= 11; mo++) targets.push({ y: now.getFullYear(), mo });
 
   for (const circuit of CIRCUITS) {
     if (blocked) break;
