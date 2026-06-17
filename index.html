@@ -70,6 +70,9 @@
   .mbox .mm{font-size:10px;text-transform:capitalize;opacity:.85}
   .mbox .mn{font-weight:750;font-size:14px}
   .mbox.cur{outline:2px solid var(--sel);outline-offset:-1px}
+  .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .mhead button{padding:3px 10px}
+  .blockx{padding:2px 9px;align-self:center}
   .block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow:auto}
   .bh{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
   .bh .nm{font-weight:700;font-size:15px}
@@ -230,15 +233,22 @@ function renderMonthly(){
   const rs=DATA.routes.filter(r=>monthSel.has(r.id));
   if(!rs.length){mp.style.display="none";mp.innerHTML="";return;}
   mp.style.display="block";
-  let html=`<div style="font-weight:700;margin-bottom:8px">Resumen por mes <span class="sub">— clic en un mes para llevar los calendarios a ese mes</span></div>`;
+  let html=`<div class="mhead"><button id="mclose" title="cerrar">✕</button><b>Resumen por mes</b><span class="sub">— clic en un mes para verlo</span></div>`;
   rs.forEach(rt=>{
-    let maxT=1;
-    const totals=months.map(mk=>{let t=0;for(const k in rt.days){if(k.indexOf(mk)===0){const v=rt.days[k];if(v&&typeof v==="object")t+=Object.values(v).reduce((a,b)=>a+(b||0),0);}}if(t>maxT)maxT=t;return t;});
+    const totals=months.map(mk=>{let t=0;for(const k in rt.days){if(k.indexOf(mk)===0){const v=rt.days[k];if(v&&typeof v==="object")t+=Object.values(v).reduce((a,b)=>a+(b||0),0);}}return t;});
+    const maxT=Math.max(1,...totals);
     let boxes="";
-    months.forEach((mk,i)=>{const yy=mk.slice(2,4),mm=+mk.slice(5,7);const t=totals[i];const bg=t>0?color(t,maxT):"var(--zero)";const cur=i===curIdx?" cur":"";const dark=t>0?'#08120c':'var(--muted)';boxes+=`<div class="mbox${cur}" data-mi="${i}" style="background:${bg}"><div class="mm" style="color:${dark}">${MONTHS[mm-1].slice(0,3)} ${yy}</div><div class="mn" style="color:${t>0?'#08120c':'#6a7e8e'}">${t>0?t.toLocaleString('es-PE'):'—'}</div></div>`;});
+    months.forEach((mk,i)=>{
+      const yy=+mk.slice(0,4),mm=+mk.slice(5,7);const t=totals[i];
+      const bg=t>0?color(t,maxT):"var(--zero)";const cur=i===curIdx?" cur":"";
+      let dl="";for(let d=1;d<=daysIn(yy,mm-1);d++){const v=rt.days[`${yy}-${pad(mm)}-${pad(d)}`];if(v&&typeof v==="object"){const s=Object.values(v).reduce((a,b)=>a+(b||0),0);if(s>0)dl+=`${d} ${MONTHS[mm-1].slice(0,3)} → ${s}\n`;}}
+      const tip=`${rt.id} · ${MONTHS[mm-1]} ${yy}\n`+(dl||"sin cupos");
+      boxes+=`<div class="mbox${cur}" data-id="${rt.id}" data-mi="${i}" data-tip="${tip.replace(/"/g,'&quot;')}" style="background:${bg}"><div class="mm" style="color:${t>0?'#08120c':'var(--muted)'}">${MONTHS[mm-1].slice(0,3)} ${String(yy).slice(2)}</div><div class="mn" style="color:${t>0?'#08120c':'#6a7e8e'}">${t>0?t.toLocaleString('es-PE'):'—'}</div></div>`;
+    });
     html+=`<div class="mrow"><div class="mlab">${rt.id}</div><div class="mboxes2">${boxes}</div></div>`;
   });
   mp.innerHTML=html;
+  const mc=document.getElementById("mclose");if(mc)mc.onclick=()=>{monthSel.clear();renderMonthly();renderPicker();};
 }
 function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
@@ -260,7 +270,7 @@ function renderBlocks(){
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
     let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
     const b=document.createElement("div");b.className="block";
-    b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
+    b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
       <span class="tag">${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
@@ -299,8 +309,11 @@ document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){docume
 document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=e.target.closest("[data-id]");if(!el)return;const id=el.dataset.id;selected.has(id)?selected.delete(id):selected.add(id);renderPicker();renderBlocks();renderDetail();});
 
 // clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
-document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
-document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;curIdx=+el.dataset.mi;renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
+document.getElementById("blocks").addEventListener("click",e=>{
+  const xb=e.target.closest("[data-x]");
+  if(xb){selected.delete(xb.dataset.x);renderPicker();renderBlocks();renderMonthly();return;}
+  const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;if(el.dataset.id)selected.add(el.dataset.id);curIdx=+el.dataset.mi;renderPicker();renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
 
 // ancho ajustable del sidebar (arrastrar el borde; se recuerda)
 (function(){
