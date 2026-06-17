@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#0f1419;--panel:#171e26;--panel2:#1e2731;--line:#2a3744;
-    --txt:#e6edf3;--muted:#8aa0b2;--accent:#c8472b;--sel:#f0c25a;
+    --txt:#e6edf3;--muted:#8aa0b2;--accent:#c8472b;--sel:#c026d3;
     --g1:#1a9850;--g2:#66bd63;--g3:#a6d96a;--y1:#fee08b;--o1:#fdae61;--r1:#f46d43;--r2:#d73027;--zero:#2b3742;
   }
   *{box-sizing:border-box}
@@ -57,7 +57,7 @@
   .dhead button{padding:4px 12px;font-size:15px}
   .dboxes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-width:920px}
   .dbox{border:1px solid var(--line);border-radius:9px;padding:6px 8px;cursor:pointer}
-  .dbox.on{outline:2px solid var(--sel);outline-offset:-1px}
+  .dbox.on{outline:3px solid var(--sel);outline-offset:-1px}
   .dbox .dbid{font-weight:700;font-size:12px}
   .dbox .dbnum{font-size:15px;font-weight:750;margin:1px 0}
   .dbox .dbnm{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -69,11 +69,11 @@
   .monthly{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:none}
   .mrow{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
   .mrow .mlab{min-width:34px;font-weight:700;font-size:13px;padding-top:6px}
-  .mboxes2{display:flex;gap:6px;flex-wrap:wrap}
-  .mbox{border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;text-align:center;min-width:78px}
-  .mbox .mm{font-size:10px;text-transform:capitalize;opacity:.85}
-  .mbox .mn{font-weight:750;font-size:14px}
-  .mbox.cur{outline:2px solid var(--sel);outline-offset:-1px}
+  .mboxes2{display:flex;gap:4px;flex-wrap:wrap}
+  .mbox{border:1px solid var(--line);border-radius:7px;padding:3px 6px;cursor:pointer;text-align:center;min-width:56px}
+  .mbox .mm{font-size:9px;text-transform:capitalize;opacity:.85}
+  .mbox .mn{font-weight:750;font-size:13px}
+  .mbox.cur{outline:3px solid var(--sel);outline-offset:-1px}
   .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
   .mhead button{padding:3px 10px}
   .blockx{padding:2px 9px;align-self:center}
@@ -93,7 +93,7 @@
   .cell{width:32px;height:28px;text-align:center;font-weight:700;font-size:11px;color:#08120c;border:1px solid rgba(0,0,0,.25);border-radius:3px}
   .cell.dead{background:repeating-linear-gradient(45deg,#222c35,#222c35 4px,#283440 4px,#283440 8px);color:#5b6b78}
   .weekstart{border-left:3px solid #4a5d6e}
-  .selcol{box-shadow:inset 0 0 0 2px var(--sel)}
+  .selcol{box-shadow:inset 0 0 0 3px var(--sel)}
   .legend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
   .legend .sw{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
   .empty{color:var(--muted);text-align:center;padding:40px}
@@ -113,7 +113,7 @@
     <div class="monthrow"><button id="prev">‹</button><div class="month" id="monthlbl">—</div><button id="next">›</button></div>
     <div class="datego">
       <input id="datebox" type="text" placeholder="Ir a fecha: 22/08/2026" title="Escribe la fecha con año, ej. 22/08/2026 o 220826. Si no pones año, asume el próximo.">
-      <button id="datego">Ir</button>
+      <button id="datego" title="Abrir/cerrar día (vacío = hoy)">Día</button>
     </div>
     <div class="sub" id="updated" style="margin:10px 0 4px"></div>
 
@@ -138,7 +138,7 @@ const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu"};
 const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null;
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null, detCollapsed=false, monCollapsed=false, blockCollapsed=new Set();
 
 const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
 const pad=n=>String(n).padStart(2,'0');
@@ -213,7 +213,7 @@ function renderDetail(){
   dp.style.display="block";
   const key=keyOf(selDate);
   const ds=selDate.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  dp.querySelector(".dhead").innerHTML=`<button id="dclose" title="cerrar">✕</button><button id="dprev" title="día anterior">‹</button><button id="dnext" title="día siguiente">›</button><div class="dtitle">${ds}</div>`;
+  dp.querySelector(".dhead").innerHTML=`<button id="dclose" title="cerrar">✕</button><button id="dprev" title="día anterior">‹</button><button id="dnext" title="día siguiente">›</button><div class="dtitle" id="dtitle" style="cursor:pointer" title="clic para plegar/desplegar">${detCollapsed?'▸':'▾'} ${ds}</div>`;
   let html="";
   DATA.routes.forEach(rt=>{
     const v=rt.days[key];
@@ -224,9 +224,11 @@ function renderDetail(){
     html+=`<div class="dbox ${cls}${selected.has(rt.id)?' on':''}" data-id="${rt.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${shortName(rt)}</div></div>`;
   });
   dp.querySelector(".dboxes").innerHTML=html;
+  dp.querySelector(".dboxes").style.display=detCollapsed?"none":"";
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
   document.getElementById("dnext").onclick=()=>shiftDay(1);
   document.getElementById("dclose").onclick=()=>{selDate=null;renderDetail();renderBlocks();};
+  document.getElementById("dtitle").onclick=()=>{detCollapsed=!detCollapsed;renderDetail();};
 }
 function shiftDay(n){if(!selDate)return;selDate=new Date(selDate.getTime()+n*86400000);syncMonth();renderDetail();renderBlocks();renderMonthly();}
 function syncMonth(){if(!selDate)return;const i=months.indexOf(keyOf(selDate).slice(0,7));if(i>=0)curIdx=i;routeMonth={};}
@@ -236,7 +238,7 @@ function jumpDate(str){
   if(dd.length>=8)year=+dd.slice(4,8); else if(dd.length>=6)year=2000+ +dd.slice(4,6);
   else{const n=new Date();year=n.getFullYear();if(new Date(year,mon-1,day)<new Date(n.getFullYear(),n.getMonth(),n.getDate()))year++;}
   if(!day||!mon||mon>12||day>31)return;
-  selDate=new Date(year,mon-1,day);syncMonth();renderDetail();renderBlocks();renderMonthly();
+  detCollapsed=false;selDate=new Date(year,mon-1,day);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function renderMonthly(){
@@ -244,8 +246,8 @@ function renderMonthly(){
   const rs=DATA.routes.filter(r=>monthSel.has(r.id));
   if(!rs.length){mp.style.display="none";mp.innerHTML="";return;}
   mp.style.display="block";
-  let html=`<div class="mhead"><button id="mclose" title="cerrar">✕</button><b>Resumen por mes</b><span class="sub">— clic en un mes para verlo</span></div>`;
-  rs.forEach(rt=>{
+  let html=`<div class="mhead"><button id="mclose" title="cerrar">✕</button><b id="montitle" style="cursor:pointer" title="clic para plegar/desplegar">${monCollapsed?'▸':'▾'} Resumen por mes</b><span class="sub">— clic en un mes para verlo</span></div>`;
+  if(!monCollapsed) rs.forEach(rt=>{
     const totals=months.map(mk=>{let t=0;for(const k in rt.days){if(k.indexOf(mk)===0){const v=rt.days[k];if(v&&typeof v==="object")t+=Object.values(v).reduce((a,b)=>a+(b||0),0);}}return t;});
     const maxT=Math.max(1,...totals);
     let boxes="";
@@ -260,6 +262,7 @@ function renderMonthly(){
   });
   mp.innerHTML=html;
   const mc=document.getElementById("mclose");if(mc)mc.onclick=()=>{monthSel.clear();renderMonthly();renderPicker();};
+  const mt=document.getElementById("montitle");if(mt)mt.onclick=()=>{monCollapsed=!monCollapsed;renderMonthly();};
 }
 function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
@@ -281,9 +284,11 @@ function renderBlocks(){
     const ratio=diasCupo/nd;
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
     let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
+    const collapsed=blockCollapsed.has(rt.id);
     const b=document.createElement("div");b.className="block";
-    b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><button class="bmnav" data-mprev="${rt.id}" title="mes anterior">‹</button><button class="bmnav" data-mnext="${rt.id}" title="mes siguiente">›</button><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
+    b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><button class="bmnav" data-mprev="${rt.id}" title="mes anterior">‹</button><button class="bmnav" data-mnext="${rt.id}" title="mes siguiente">›</button><span class="nm" data-collapse="${rt.id}" style="cursor:pointer" title="clic para plegar/desplegar">${collapsed?'▸':'▾'} ${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
       <span class="tag"><b>${MONTHS[m]} ${y}</b> · ${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
+    if(collapsed){host.appendChild(b);return;}
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
     for(let d=1;d<=nd;d++){const dk=`${y}-${pad(m+1)}-${pad(d)}`;const dow=new Date(y,m,d).getDay();const ws=dow===1?" weekstart":"";const sd=(selKey===dk)?" selcol":"";h+=`<th class='ch${ws}${sd}' data-d='${dk}' style='cursor:pointer'>${d}<span class='dow'>${DOW[dow]}</span></th>`;}
@@ -313,7 +318,12 @@ document.addEventListener("mouseout",e=>{const t=e.target.closest&&e.target.clos
 
 document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;routeMonth={};renderBlocks();renderMonthly();}};
 document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;routeMonth={};renderBlocks();renderMonthly();}};
-document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
+document.getElementById("datego").onclick=()=>{
+  if(selDate){selDate=null;renderDetail();renderBlocks();renderMonthly();return;}
+  const v=document.getElementById("datebox").value;
+  if(v.replace(/\D/g,"").length>=4){jumpDate(v);}
+  else{detCollapsed=false;selDate=new Date();syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});}
+};
 document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
 
 // clic en una caja de ticket del panel del día → muestra/oculta ese ticket en los calendarios de abajo
@@ -325,7 +335,11 @@ document.getElementById("blocks").addEventListener("click",e=>{
   const mnx=e.target.closest("[data-mnext]");if(mnx){const id=mnx.dataset.mnext;routeMonth[id]=Math.min(months.length-1,mIdx(id)+1);renderBlocks();renderMonthly();return;}
   const xb=e.target.closest("[data-x]");
   if(xb){selected.delete(xb.dataset.x);renderPicker();renderBlocks();renderMonthly();return;}
-  const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
+  const cb=e.target.closest("[data-collapse]");
+  if(cb){const id=cb.dataset.collapse;blockCollapsed.has(id)?blockCollapsed.delete(id):blockCollapsed.add(id);renderBlocks();return;}
+  const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);const nd=new Date(p[0],p[1]-1,p[2]);
+  if(selDate&&keyOf(selDate)===keyOf(nd)){selDate=null;renderDetail();renderBlocks();renderMonthly();return;}
+  detCollapsed=false;selDate=nd;syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
 document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;const id=el.dataset.id,i=+el.dataset.mi;if(selected.has(id)&&mIdx(id)===i){selected.delete(id);}else{selected.add(id);routeMonth[id]=i;}renderPicker();renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
 
 // ancho ajustable del sidebar (arrastrar el borde; se recuerda)
