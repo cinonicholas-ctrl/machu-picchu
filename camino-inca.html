@@ -64,8 +64,8 @@
 <body>
 <header>
   <h1>🥾 Disponibilidad Camino Inca</h1>
-  <span class="badge" id="freshbadge">cargando…</span>
-  <a href="index.html" style="margin-left:auto;background:#1e2731;border:1px solid #2a3744;color:#e6edf3;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;text-decoration:none">🏔️ Machu Picchu →</a>
+  <a href="index.html" style="background:#1e2731;border:1px solid #2a3744;color:#e6edf3;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;text-decoration:none">🏔️ Ir a Machu Picchu</a>
+  <span class="badge" id="freshbadge" style="margin-left:auto">cargando…</span>
 </header>
 
 <div class="wrap">
@@ -208,8 +208,8 @@ fetch('camino_inca.json?t='+Date.now()).then(r=>r.json()).then(d=>{
   d.tickets.forEach(t=>{
     const b=document.createElement('button');
     b.className='tbtn'; b.dataset.id=t.id;
-    const corto = t.id==='eB';
-    b.innerHTML=`${corto?'Camino Inca corto':'Camino Inca 4 días'}<small>${corto?'km 104 · Chachabamba':'Clásico'}</small>`;
+    const corto = /2\s*d[ií]as|km\s*104/i.test(t.name);
+    b.innerHTML=`${corto?'Camino Inca 2 días':'Camino Inca 4 días'}<small>${corto?'km 104 · Chachabamba':'Clásico'}</small>`;
     b.onclick=()=>setTicket(t.id);
     tc.appendChild(b);
   });
