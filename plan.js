@@ -26,11 +26,9 @@ if (SEL === 'Solo bloqueados') {
       if (!routes.length) {
         incomplete = true; // no tenemos nada de ese circuito todavía
       } else {
-        // un mes está "completo" si CADA ruta tiene los días del mes registrados
+        // un mes está "completo" si CADA ruta tiene SELLO de confirmación para ese mes
         for (const r of routes) {
-          let cnt = 0;
-          for (let d = 1; d <= nd; d++) { if (r.days && (`${yy}-${pad(mm)}-${pad(d)}` in r.days)) cnt++; }
-          if (cnt < nd) { incomplete = true; break; }
+          if (!r.conf || !r.conf[mk]) { incomplete = true; break; }
         }
       }
       if (incomplete) combos.push({ c, m: mk });
