@@ -1,0 +1,39 @@
+name: Robot Camino Inca
+
+# MODO PRUEBA: por ahora SOLO se lanza a mano (workflow_dispatch), nunca solo.
+# Así no se cruza jamás con el Robot Machu Picchu. Cuando confirmemos que todo
+# está bien, descomenta el bloque "schedule" de abajo para que corra cada 6h.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '30 */6 * * *'   # minuto 30 a propósito, para no coincidir con el robot MP
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrape-camino
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Recolectar disponibilidad
+        run: node camino_inca_scrape.js
+
+      - name: Guardar camino_inca.json en el repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add camino_inca.json
+          git commit -m "Actualizar disponibilidad Camino Inca" || echo "sin cambios"
+          for i in 1 2 3; do
+            git pull --rebase -X ours origin main && git push origin main && break
+            echo "push falló, reintento..."; sleep 10
+          done
