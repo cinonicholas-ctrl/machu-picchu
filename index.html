@@ -35,7 +35,11 @@
   .datego input{flex:1}
   .grp{margin:10px 0 4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;padding:4px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:center}
   .grp:hover{background:var(--panel2);color:var(--txt)}
-  .grp .gt{font-size:10px;opacity:.7}
+  .grp{cursor:default}
+  .grp .gt{font-size:10px;opacity:.7;cursor:pointer}
+  .grp .gt:hover{opacity:1;text-decoration:underline}
+  .gacts{display:flex;gap:12px;align-items:center}
+  #mchkR{cursor:pointer;font-size:11px;opacity:.85}
   .opt{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:pointer}
   .opt:hover{background:var(--panel2)}
   .opt input{accent-color:var(--accent);width:15px;height:15px}
@@ -114,7 +118,7 @@
     <div class="sub" id="updated" style="margin:10px 0 4px"></div>
 
     <h3>Tipo de ticket</h3>
-    <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk">Todos los tickets</label></div>
+    <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk" style="flex:1">Todos los tickets</label><span id="mchkR" title="Resumen por mes de todos">📅 todos</span></div>
     <div class="sub" style="margin:0 0 8px;font-size:11px">☑ izq = ver calendario &nbsp;·&nbsp; 📅 der = resumen por mes</div>
     <div id="picker"></div>
     <div class="sub" style="font-size:10px;margin-top:12px">TA = solo en temporada alta</div>
@@ -171,22 +175,27 @@ function ago(iso){if(!iso)return"";const d=(Date.now()-new Date(iso).getTime())/
 function color(v,cap){if(v<=0)return"var(--zero)";const r=v/cap;if(r>0.55)return"var(--g1)";if(r>0.4)return"var(--g2)";if(r>0.28)return"var(--g3)";if(r>0.18)return"var(--y1)";if(r>0.10)return"var(--o1)";if(r>0.03)return"var(--r1)";return"var(--r2)";}
 
 function renderPicker(){
-  // master
-  const allOn=DATA.routes.length>0 && DATA.routes.every(r=>selected.has(r.id));
-  document.getElementById("mchk").checked=allOn;
-  const p=document.getElementById("picker");p.innerHTML="";let lastG=null,gwrap=null;
+  // master: izq = todos los calendarios, der = 📅 todos (resumen por mes)
+  const allL=DATA.routes.length>0 && DATA.routes.every(r=>selected.has(r.id));
+  const allR=DATA.routes.length>0 && DATA.routes.every(r=>monthSel.has(r.id));
+  const mchk=document.getElementById("mchk"); mchk.checked=allL;
+  mchk.onchange=()=>{ if(mchk.checked)DATA.routes.forEach(r=>selected.add(r.id)); else selected.clear(); renderPicker();renderBlocks();renderMonthly(); };
+  const mr=document.getElementById("mchkR"); if(mr){ mr.style.color=allR?'var(--sel)':''; mr.onclick=()=>{ if(allR)monthSel.clear(); else DATA.routes.forEach(r=>monthSel.add(r.id)); renderPicker();renderBlocks();renderMonthly(); }; }
+  const p=document.getElementById("picker");p.innerHTML="";let lastG=null;
   DATA.routes.forEach(rt=>{
     if(rt.group!==lastG){
       lastG=rt.group;
       const grpRoutes=DATA.routes.filter(r=>r.group===rt.group);
       const ids=grpRoutes.map(r=>r.id);
-      const gOn=ids.every(id=>selected.has(id));
+      const gOnL=ids.every(id=>selected.has(id));
+      const gOnR=ids.every(id=>monthSel.has(id));
       const ups=grpRoutes.map(r=>r.updated?new Date(r.updated).getTime():0).filter(Boolean);
       let fr="";
       if(ups.length){const h=(Date.now()-Math.min(...ups))/3.6e6;fr=` · <b style="color:${h<8?'#7ee0a3':'#fdc98b'}">${h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d')}</b>`;}
       const g=document.createElement("div");g.className="grp";
-      g.innerHTML=`<span>${rt.group}${fr}</span><span class="gt">${gOn?'quitar todos':'marcar todos'}</span>`;
-      g.onclick=()=>{const on=ids.every(id=>selected.has(id));ids.forEach(id=>on?selected.delete(id):selected.add(id));renderPicker();renderBlocks();};
+      g.innerHTML=`<span>${rt.group}${fr}</span><span class="gacts"><span class="gt" data-gl>${gOnL?'quitar':'marcar'}</span><span class="gt" data-gr style="color:${gOnR?'var(--sel)':''}">📅 ${gOnR?'quitar':'marcar'}</span></span>`;
+      g.querySelector('[data-gl]').onclick=()=>{ids.forEach(id=>gOnL?selected.delete(id):selected.add(id));renderPicker();renderBlocks();renderMonthly();};
+      g.querySelector('[data-gr]').onclick=()=>{ids.forEach(id=>gOnR?monthSel.delete(id):monthSel.add(id));renderPicker();renderBlocks();renderMonthly();};
       p.appendChild(g);
     }
     const row=document.createElement("div");row.className="opt";
@@ -306,7 +315,6 @@ document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;routeMonth={}
 document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;routeMonth={};renderBlocks();renderMonthly();}};
 document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
 document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
-document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){document.getElementById("mchk").checked=!document.getElementById("mchk").checked;} const on=DATA.routes.every(r=>selected.has(r.id)); if(on)selected.clear(); else DATA.routes.forEach(r=>selected.add(r.id)); renderPicker();renderBlocks(); };
 
 // clic en una caja de ticket del panel del día → muestra/oculta ese ticket en los calendarios de abajo
 document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=e.target.closest("[data-id]");if(!el)return;const id=el.dataset.id;selected.has(id)?selected.delete(id):selected.add(id);renderPicker();renderBlocks();renderDetail();});
