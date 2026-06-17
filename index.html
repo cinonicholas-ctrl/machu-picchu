@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#0f1419;--panel:#171e26;--panel2:#1e2731;--line:#2a3744;
-    --txt:#e6edf3;--muted:#8aa0b2;--accent:#c8472b;
+    --txt:#e6edf3;--muted:#8aa0b2;--accent:#c8472b;--sel:#f0c25a;
     --g1:#1a9850;--g2:#66bd63;--g3:#a6d96a;--y1:#fee08b;--o1:#fdae61;--r1:#f46d43;--r2:#d73027;--zero:#2b3742;
   }
   *{box-sizing:border-box}
@@ -15,25 +15,49 @@
   header{padding:12px 18px;background:linear-gradient(180deg,#1b2530,#141b22);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   header h1{font-size:16px;margin:0;font-weight:650}
   .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
-  .badge.sample{background:var(--accent);color:#fff}
-  .badge.real{background:#1a9850;color:#fff}
+  .badge.sample{background:var(--accent);color:#fff}.badge.real{background:#1a9850;color:#fff}
   .monthrow{display:flex;align-items:center;gap:6px}
   .monthrow button{padding:6px 12px;font-size:15px}
   .month{flex:1;text-align:center;font-weight:600;text-transform:capitalize}
   .sub{color:var(--muted);font-size:12px}
-  select,button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
+  select,button,input{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px}
+  button{cursor:pointer}
   button:hover,select:hover{border-color:#3d4f5e}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:disabled{opacity:.7;cursor:default}
   .layout{display:flex}
   .side{width:255px;min-width:255px;border-right:1px solid var(--line);padding:14px;height:calc(100vh - 56px);overflow:auto}
-  .side h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 8px}
-  .grp{margin:10px 0 4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .side h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px}
+  .side h3:first-child{margin-top:0}
+  .buybtn{display:block;text-align:center;background:#0952b8;color:#fff;border:1px solid #1668d6;border-radius:8px;padding:10px;font-weight:700;text-decoration:none;margin-bottom:14px}
+  .buybtn:hover{background:#0a5ed0}
+  .datego{display:flex;gap:6px;margin-top:8px}
+  .datego input{flex:1}
+  .grp{margin:10px 0 4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;padding:4px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:center}
+  .grp:hover{background:var(--panel2);color:var(--txt)}
+  .grp .gt{font-size:10px;opacity:.7}
   .opt{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:pointer}
   .opt:hover{background:var(--panel2)}
   .opt input{accent-color:var(--accent);width:15px;height:15px}
   .opt label{cursor:pointer;font-size:13px}
+  .master{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
+  .master input{accent-color:var(--accent);width:16px;height:16px}
   main{flex:1;padding:14px 18px;height:calc(100vh - 56px);overflow:auto}
   .note{background:rgba(200,71,43,.08);border:1px solid rgba(200,71,43,.3);color:#f0c2b5;border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:12.5px}
+  /* panel detalle del dia */
+  .detail{background:var(--panel2);border:1px solid var(--sel);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:none}
+  .dhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .dhead .dtitle{font-weight:700;font-size:15px;text-transform:capitalize}
+  .dhead #dclose{margin-left:auto}
+  .dhead button{padding:4px 12px;font-size:15px}
+  .dboxes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .dbox{border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:default}
+  .dbox .dbid{font-weight:700;font-size:13px}
+  .dbox .dbnum{font-size:18px;font-weight:750;margin:2px 0}
+  .dbox .dbnm{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dbox.ok{background:rgba(26,152,80,.16);border-color:rgba(26,152,80,.4)}
+  .dbox.dead{background:repeating-linear-gradient(45deg,#222c35,#222c35 5px,#283440 5px,#283440 10px);color:#7c8b97}
+  .dbox.na{opacity:.45}
   .block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow:auto}
   .bh{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
   .bh .nm{font-weight:700;font-size:15px}
@@ -44,15 +68,16 @@
   .pill.no{background:rgba(215,48,39,.2);color:#f7a3a0}
   table{border-collapse:separate;border-spacing:0;font-size:12px}
   .rh{position:sticky;left:0;background:var(--panel2);text-align:left;padding:5px 10px 5px 4px;font-weight:600;white-space:nowrap;z-index:2;border-right:1px solid var(--line)}
-  .ch{padding:4px 0;color:var(--muted);font-weight:600;text-align:center}
+  .ch{padding:4px 2px;color:var(--muted);font-weight:600;text-align:center}
   .ch .dow{display:block;font-size:9px;color:#6a7e8e;font-weight:400}
   .cell{width:32px;height:28px;text-align:center;font-weight:700;font-size:11px;color:#08120c;border:1px solid rgba(0,0,0,.25);border-radius:3px}
-  .cell.wknd{outline:1px dashed rgba(255,255,255,.07)}
   .cell.dead{background:repeating-linear-gradient(45deg,#222c35,#222c35 4px,#283440 4px,#283440 8px);color:#5b6b78}
+  .weekstart{border-left:3px solid #4a5d6e}
+  .selcol{box-shadow:inset 0 0 0 2px var(--sel)}
   .legend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
   .legend .sw{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
   .empty{color:var(--muted);text-align:center;padding:40px}
-  .tip{position:fixed;pointer-events:none;background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;z-index:30;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .tip{position:fixed;pointer-events:none;background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;z-index:30;display:none;white-space:pre-line;box-shadow:0 6px 18px rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
@@ -63,20 +88,22 @@
 
 <div class="layout">
   <aside class="side">
+    <a class="buybtn" href="https://tuboleto.cultura.pe/dashboard/agencia/inicio" target="_blank" rel="noopener">🎟️ Comprar en Tu Boleto ↗</a>
     <h3>Mes</h3>
-    <div class="monthrow">
-      <button id="prev">‹</button>
-      <div class="month" id="monthlbl">—</div>
-      <button id="next">›</button>
+    <div class="monthrow"><button id="prev">‹</button><div class="month" id="monthlbl">—</div><button id="next">›</button></div>
+    <div class="datego">
+      <input id="datebox" type="text" placeholder="Ir a fecha: 22/08/2026" title="Escribe la fecha con año, ej. 22/08/2026 o 220826. Si no pones año, asume el próximo.">
+      <button id="datego">Ir</button>
     </div>
-    <button class="primary" id="refresh" style="width:100%;margin-top:8px">↻ Refrescar</button>
-    <div class="sub" id="updated" style="margin:6px 0 16px"></div>
+    <div class="sub" id="updated" style="margin:10px 0 4px"></div>
+
     <h3>Tipo de ticket</h3>
-    <div class="sub" style="margin-bottom:8px">Marca uno o varios para comparar</div>
+    <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk">Todos los tickets</label></div>
     <div id="picker"></div>
   </aside>
   <main>
     <div class="note" id="note"></div>
+    <div class="detail" id="detail"><div class="dhead"></div><div class="dboxes"></div></div>
     <div id="blocks"></div>
   </main>
 </div>
@@ -85,154 +112,153 @@
 <script>
 const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), firstLoad=true;
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), firstLoad=true, selDate=null;
 
-function daysIn(y,m){return new Date(y,m+1,0).getDate();}
-function pad(n){return String(n).padStart(2,'0');}
+const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
+const pad=n=>String(n).padStart(2,'0');
+const keyOf=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
-// ---- Fallback local (cuando se abre con doble clic y no carga data.json) ----
 function buildSample(){
  const routes=[
-  ["Circuito 1 — Panorámico","1B","Circuito 1-B · Terraza Superior",["06","07","08","09","10","11","12","13","14"],130],
-  ["Circuito 1 — Panorámico","1A","Circuito 1-A · Montaña Machupicchu",["06","07","08"],55],
-  ["Circuito 1 — Panorámico","1C","Circuito 1-C · Intipunku (Puerta del Sol)",["06","07","08","09","10"],60],
-  ["Circuito 1 — Panorámico","1D","Circuito 1-D · Puente Inca",["06","07","08","09","10"],45],
-  ["Circuito 2 — Clásico","2A","Circuito 2-A · Clásico diseñado",["06","07","08","09","10","11","12","13","14"],160],
-  ["Circuito 2 — Clásico","2B","Circuito 2-B · Terraza Inferior",["07","08","09","10","11","12"],95],
-  ["Circuito 3 — Realeza","3A","Circuito 3-A · Huayna Picchu",["07","08","09","10"],100],
-  ["Circuito 3 — Realeza","3B","Circuito 3-B · Realeza diseñado",["06","07","08","09","10","11","12","13"],120],
-  ["Circuito 3 — Realeza","3C","Circuito 3-C · Gran Caverna",["06","07","08"],50],
-  ["Circuito 3 — Realeza","3D","Circuito 3-D · Huchuy Picchu",["07","08","09"],60],
+  ["Circuito 1","1B","Circuito 1-B · Terraza Superior",["06","07","08","09","10","11","12","13","14"],130],
+  ["Circuito 1","1A","Circuito 1-A · Montaña Machupicchu",["06","07","08"],55],
+  ["Circuito 2","2A","Circuito 2-A · Clásico diseñado",["06","07","08","09","10","11","12","13","14"],160],
+  ["Circuito 3","3A","Circuito 3-A · Huayna Picchu",["07","08","09","10"],100],
  ];
  const rnd=s=>{let x=Math.sin(s)*10000;return x-Math.floor(x);};
  const mlist=[[2026,6],[2026,7],[2026,8]];
  const out={updated:new Date().toISOString(),sample:true,routes:[]};
- routes.forEach(([grp,id,nm,slots,cap])=>{
-   const days={};
-   mlist.forEach(([y,m])=>{for(let d=1;d<=daysIn(y,m);d++){
-     const dow=new Date(y,m,d).getDay();const high=m===6||m===7;
-     const seed=(id.charCodeAt(0)*31+id.charCodeAt(1))*1e5+(y*372+m*31+d)*17;
-     let pdead=0.05+(high?0.12:0)+((dow===0||dow===6)?0.06:0)+(cap<70?0.1:0);
-     const key=`${y}-${pad(m+1)}-${pad(d)}`;
-     if(rnd(seed)<pdead){days[key]=null;continue;}
-     const sm={};slots.forEach((s,i)=>{let dem=0.4+(high?0.25:0)+((dow===0||dow===6)?0.1:0)+(s<="09"?0.18:0);dem=Math.min(0.99,dem)*(0.55+0.85*rnd(seed+i*131));let c=Math.max(0,Math.round(cap*(1-dem)));if(rnd(seed*1.7+i)<0.12)c=0;sm[s]=c;});
-     days[key]=sm;
-   }});
-   out.routes.push({id,group:grp,name:nm,slots,cap,days});
- });
+ routes.forEach(([grp,id,nm,slots,cap])=>{const days={};mlist.forEach(([y,m])=>{for(let d=1;d<=daysIn(y,m);d++){const seed=(id.charCodeAt(0)*31+id.charCodeAt(1))*1e5+(y*372+m*31+d)*17;const key=`${y}-${pad(m+1)}-${pad(d)}`;if(rnd(seed)<0.18){days[key]=null;continue;}const sm={};slots.forEach((s,i)=>{let c=Math.max(0,Math.round(cap*(0.2+0.8*rnd(seed+i*131))));if(rnd(seed*1.7+i)<0.12)c=0;sm[s]=c;});days[key]=sm;}});out.routes.push({id,group:grp,name:nm,slots,cap,updated:new Date().toISOString(),days});});
  return out;
 }
 
 async function loadData(){
-  try{
-    const r=await fetch('data.json?t='+Date.now());
-    if(!r.ok) throw 0;
-    DATA=await r.json(); MODE = DATA.sample ? "sample-file" : "real";
-  }catch(e){ DATA=buildSample(); MODE="local"; }
-  // meses presentes
-  const set=new Set();
-  DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
+  try{ const r=await fetch('data.json?t='+Date.now()); if(!r.ok)throw 0; DATA=await r.json(); MODE=DATA.sample?"sample-file":"real"; }
+  catch(e){ DATA=buildSample(); MODE="local"; }
+  const set=new Set(); DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
   months=[...set].sort();
-  if(curIdx>=months.length) curIdx=0;
+  if(curIdx>=months.length)curIdx=0;
   if(!selected.size) selected=new Set(DATA.routes.slice(0,2).map(r=>r.id));
-  // al abrir, ir al primer mes que tenga algún cupo (evita caer en un mes agotado)
-  if(firstLoad){
-    const idx=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length)));
-    if(idx>=0) curIdx=idx;
-    firstLoad=false;
-  }
+  if(firstLoad){ const i=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length))); if(i>=0)curIdx=i; firstLoad=false; }
 }
 
-function srcBadge(){
-  const b=document.getElementById("srcbadge");
-  if(MODE==="real"){b.className="badge real";b.textContent="DATOS REALES";}
-  else if(MODE==="sample-file"){b.className="badge sample";b.textContent="DATOS DE MUESTRA";}
-  else {b.className="badge sample";b.textContent="MUESTRA (vista local)";}
-}
-function ago(iso){
-  if(!iso) return "";
-  const diff=(Date.now()-new Date(iso).getTime())/60000;
-  if(diff<2) return "Actualizado: hace un momento";
-  if(diff<90) return "Actualizado: hace "+Math.round(diff)+" min";
-  return "Actualizado: hace "+Math.round(diff/60)+" h";
-}
+function srcBadge(){const b=document.getElementById("srcbadge");if(MODE==="real"){b.className="badge real";b.textContent="DATOS REALES";}else if(MODE==="sample-file"){b.className="badge sample";b.textContent="DATOS DE MUESTRA";}else{b.className="badge sample";b.textContent="MUESTRA (vista local)";}}
+function ago(iso){if(!iso)return"";const d=(Date.now()-new Date(iso).getTime())/60000;if(d<2)return"Actualizado: hace un momento";if(d<90)return"Actualizado: hace "+Math.round(d)+" min";return"Actualizado: hace "+Math.round(d/60)+" h";}
 function color(v,cap){if(v<=0)return"var(--zero)";const r=v/cap;if(r>0.55)return"var(--g1)";if(r>0.4)return"var(--g2)";if(r>0.28)return"var(--g3)";if(r>0.18)return"var(--y1)";if(r>0.10)return"var(--o1)";if(r>0.03)return"var(--r1)";return"var(--r2)";}
 
 function renderPicker(){
-  const p=document.getElementById("picker");p.innerHTML="";let lastG="";
+  // master
+  const allOn=DATA.routes.length>0 && DATA.routes.every(r=>selected.has(r.id));
+  document.getElementById("mchk").checked=allOn;
+  const p=document.getElementById("picker");p.innerHTML="";let lastG=null,gwrap=null;
   DATA.routes.forEach(rt=>{
-    if(rt.group!==lastG){lastG=rt.group;const g=document.createElement("div");g.className="grp";g.textContent=rt.group;p.appendChild(g);}
+    if(rt.group!==lastG){
+      lastG=rt.group;
+      const ids=DATA.routes.filter(r=>r.group===rt.group).map(r=>r.id);
+      const gOn=ids.every(id=>selected.has(id));
+      const g=document.createElement("div");g.className="grp";
+      g.innerHTML=`<span>${rt.group}</span><span class="gt">${gOn?'quitar todos':'marcar todos'}</span>`;
+      g.onclick=()=>{const on=ids.every(id=>selected.has(id));ids.forEach(id=>on?selected.delete(id):selected.add(id));renderPicker();renderBlocks();};
+      p.appendChild(g);
+    }
     const row=document.createElement("div");row.className="opt";
     row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</label>`;
-    row.querySelector("input").onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderBlocks();};
+    row.querySelector("input").onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderPicker();renderBlocks();};
     p.appendChild(row);
   });
 }
 
+function renderDetail(){
+  const dp=document.getElementById("detail");
+  if(!selDate){dp.style.display="none";return;}
+  dp.style.display="block";
+  const key=keyOf(selDate);
+  const ds=selDate.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  dp.querySelector(".dhead").innerHTML=`<button id="dprev" title="día anterior">‹</button><button id="dnext" title="día siguiente">›</button><div class="dtitle">${ds}</div><button id="dclose" title="cerrar">✕</button>`;
+  let html="";
+  DATA.routes.forEach(rt=>{
+    const v=rt.days[key];
+    let cls="na",num="—",tip=rt.id+" · "+ds+"\n";
+    if(v===null){cls="dead";num="Agotado";tip+="Agotado / no disponible";}
+    else if(v&&Object.keys(v).length){const tot=Object.values(v).reduce((a,b)=>a+(b||0),0);cls=tot>0?"ok":"dead";num=tot>0?tot+" cupos":"Agotado";tip+=rt.slots.map(s=>v[s]!=null?`${s}:00  →  ${v[s]}`:null).filter(Boolean).join("\n")||"sin horarios";}
+    else {tip+="sin dato (no verificado)";}
+    html+=`<div class="dbox ${cls}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${(rt.name.split('· ')[1]||"")}</div></div>`;
+  });
+  dp.querySelector(".dboxes").innerHTML=html;
+  document.getElementById("dprev").onclick=()=>shiftDay(-1);
+  document.getElementById("dnext").onclick=()=>shiftDay(1);
+  document.getElementById("dclose").onclick=()=>{selDate=null;renderDetail();renderBlocks();};
+}
+function shiftDay(n){if(!selDate)return;selDate=new Date(selDate.getTime()+n*86400000);syncMonth();renderDetail();renderBlocks();}
+function syncMonth(){if(!selDate)return;const i=months.indexOf(keyOf(selDate).slice(0,7));if(i>=0)curIdx=i;}
+function jumpDate(str){
+  const dd=(str||"").replace(/\D/g,"");if(dd.length<4)return;
+  const day=+dd.slice(0,2),mon=+dd.slice(2,4);let year;
+  if(dd.length>=8)year=+dd.slice(4,8); else if(dd.length>=6)year=2000+ +dd.slice(4,6);
+  else{const n=new Date();year=n.getFullYear();if(new Date(year,mon-1,day)<new Date(n.getFullYear(),n.getMonth(),n.getDate()))year++;}
+  if(!day||!mon||mon>12||day>31)return;
+  selDate=new Date(year,mon-1,day);syncMonth();renderDetail();renderBlocks();
+}
+
 function renderBlocks(){
-  document.getElementById("note").innerHTML = (MODE==="real")
-    ? "✅ Datos reales del sitio oficial. El botón <b>Refrescar</b> trae lo último guardado."
-    : "👀 Datos de muestra para mostrar el formato. Cuando se conecte el robot, aquí saldrán los cupos reales.";
+  document.getElementById("note").innerHTML=(MODE==="real")
+    ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles."
+    :"👀 Datos de muestra para mostrar el formato.";
   document.getElementById("updated").textContent=ago(DATA.updated);
   srcBadge();
-  if(!months.length){document.getElementById("blocks").innerHTML='<div class="empty">No hay datos cargados todavía.</div>';return;}
-  const [Y,M]=months[curIdx].split('-').map(Number); const y=Y,m=M-1,nd=daysIn(y,m);
+  if(!months.length){document.getElementById("blocks").innerHTML='<div class="empty">No hay datos cargados.</div>';return;}
+  const [Y,M]=months[curIdx].split('-').map(Number);const y=Y,m=M-1,nd=daysIn(y,m);
   document.getElementById("monthlbl").textContent=MONTHS[m]+" "+y;
+  const selKey=selDate?keyOf(selDate):null;
   const host=document.getElementById("blocks");host.innerHTML="";
   const sel=DATA.routes.filter(r=>selected.has(r.id));
-  if(!sel.length){host.innerHTML='<div class="empty">Selecciona al menos un tipo de ticket a la izquierda.</div>';return;}
+  if(!sel.length){host.innerHTML='<div class="empty">Marca al menos un tipo de ticket a la izquierda.</div>';return;}
   sel.forEach(rt=>{
     let diasCupo=0,diasAgot=0,prox=null;
-    for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
+    for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm&&Object.keys(sm).length){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
     const ratio=diasCupo/nd;
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
-    // frescura por ruta
-    let fresh="";
-    if(rt.updated){
-      const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;
-      if(h<14) fresh=`<span class="pill ok">✓ actualizado hace ${h<1?'<1':Math.round(h)} h</span>`;
-      else fresh=`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;
-    }
+    let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
     const b=document.createElement("div");b.className="block";
     b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</span> ${pill} ${fresh}
       <span class="tag">${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
-    for(let d=1;d<=nd;d++){const dow=new Date(y,m,d).getDay();h+=`<th class='ch'>${d}<span class='dow'>${DOW[dow]}</span></th>`;}
+    for(let d=1;d<=nd;d++){const dk=`${y}-${pad(m+1)}-${pad(d)}`;const dow=new Date(y,m,d).getDay();const ws=dow===1?" weekstart":"";const sd=(selKey===dk)?" selcol":"";h+=`<th class='ch${ws}${sd}' data-d='${dk}' style='cursor:pointer'>${d}<span class='dow'>${DOW[dow]}</span></th>`;}
     h+="</tr>";t.innerHTML=h;
     rt.slots.forEach(s=>{
-      const tr=t.insertRow();const rh=tr.insertCell();rh.className="rh";rh.textContent=s+":00";
+      const tr=t.insertRow();const rhc=tr.insertCell();rhc.className="rh";rhc.textContent=s+":00";
       for(let d=1;d<=nd;d++){
-        const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];const dow=new Date(y,m,d).getDay();
-        const td=tr.insertCell();td.className="cell"+((dow===0||dow===6)?" wknd":"");
-        if(!sm){td.className+=" dead";}
-        else{const v=sm[s]??0;td.style.background=color(v,rt.cap);td.textContent=v>0?v:"";
-          td.dataset.tip=`${rt.id} · ${d} ${MONTHS[m]} · ${s}:00 · ${v} de ${rt.cap} cupos`;}
+        const key=`${y}-${pad(m+1)}-${pad(d)}`;const sm=rt.days[key];const dow=new Date(y,m,d).getDay();
+        const td=tr.insertCell();td.className="cell"+(dow===1?" weekstart":"")+(selKey===key?" selcol":"");td.dataset.d=key;td.style.cursor="pointer";
+        if(!sm||!Object.keys(sm).length){td.className+=" dead";}
+        else{const v=sm[s]??0;td.style.background=color(v,rt.cap||100);td.textContent=v>0?v:"";td.dataset.tip=`${rt.id} · ${d} ${MONTHS[m]} · ${s}:00 · ${v} cupos`;}
       }
     });
     b.appendChild(t);
     const lg=document.createElement("div");lg.className="legend";
-    lg.innerHTML=`<span>Cupos por horario:</span>
-      <span><i class="sw" style="background:var(--g1)"></i>Muchos</span>
-      <span><i class="sw" style="background:var(--y1)"></i>Medios</span>
-      <span><i class="sw" style="background:var(--r2)"></i>Pocos</span>
-      <span><i class="sw" style="background:var(--zero)"></i>Horario agotado</span>
-      <span><i class="sw" style="background:#283440"></i>Día agotado</span>`;
+    lg.innerHTML=`<span>Cupos por horario:</span><span><i class="sw" style="background:var(--g1)"></i>Muchos</span><span><i class="sw" style="background:var(--y1)"></i>Medios</span><span><i class="sw" style="background:var(--r2)"></i>Pocos</span><span><i class="sw" style="background:var(--zero)"></i>Horario agotado</span><span><i class="sw" style="background:#283440"></i>Día agotado</span>`;
     b.appendChild(lg);
     host.appendChild(b);
   });
 }
 
+// tooltip
 const tip=document.getElementById("tip");
-document.addEventListener("mouseover",e=>{const t=e.target.dataset&&e.target.dataset.tip;if(t){tip.textContent=t;tip.style.display="block";}});
-document.addEventListener("mousemove",e=>{if(tip.style.display==="block"){tip.style.left=(e.clientX+12)+"px";tip.style.top=(e.clientY+12)+"px";}});
-document.addEventListener("mouseout",e=>{if(e.target.dataset&&e.target.dataset.tip)tip.style.display="none";});
+document.addEventListener("mouseover",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t){tip.textContent=t.dataset.tip;tip.style.display="block";}});
+document.addEventListener("mousemove",e=>{if(tip.style.display==="block"){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY+14)+"px";}});
+document.addEventListener("mouseout",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)tip.style.display="none";});
 
 document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;renderBlocks();}};
 document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;renderBlocks();}};
-document.getElementById("refresh").onclick=async()=>{await loadData();renderPicker();renderBlocks();};
+document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
+document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
+document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){document.getElementById("mchk").checked=!document.getElementById("mchk").checked;} const on=DATA.routes.every(r=>selected.has(r.id)); if(on)selected.clear(); else DATA.routes.forEach(r=>selected.add(r.id)); renderPicker();renderBlocks(); };
 
-(async()=>{await loadData();renderPicker();renderBlocks();})();
+// clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
+document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();window.scrollTo({top:0,behavior:'smooth'});});
+
+(async()=>{await loadData();renderPicker();renderBlocks();renderDetail();})();
 </script>
 </body>
 </html>
