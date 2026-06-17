@@ -1,52 +1,58 @@
 // ============================================================================
-// Camino Inca — COLECTOR (prototipo, separado del dashboard de Machu Picchu)
+// Camino Inca — COLECTOR v2 (fuente: MachuPicchuAPI)
 // ----------------------------------------------------------------------------
-// Extrae la disponibilidad por día de:
-//   - DH = Camino Inca 4 días Clásico  (límite 500/día)
-//   - eB = Camino Inca - km 104 - Chachabamba (Camino Inca corto, límite 250/día)
-// desde caminoincamachupicchu.org (datos del Ministerio de Cultura - DRC Cusco).
+// Cambiamos de caminoincamachupicchu.org (mostraba el TOPE como relleno: 500/250
+// clavados, ilógico) a la API de MachuPicchuAPI, que da cupos reales por día
+// (0 = agotado de verdad).
 //
-// NO usa navegador. Es un POST directo al AJAX de WordPress. Cero dependencias
-// (solo módulos nativos de Node). Se corre con:  node camino_inca_scrape.js
+// Endpoint (capturado del widget):
+//   POST https://api.machupicchuapi.com/v5/inca-trail/
+//   body: apikey=...&route=N&date=YYYY-MM-01&origin_domain=machu-picchu.org
+//   resp: {"error":false,"data":[{"date":"01-07-2026","total":0}, ...]}
+//   (una request = una ruta, un mes entero de cupos diarios)
 //
-// Regla de oro (igual que el dashboard MP): nunca pisar dato bueno con vacío.
-// Si una rebanada (ticket+mes) falla, se conserva lo previo de camino_inca.json.
+// Sin dependencias (solo https nativo). Se corre con:  node camino_inca_scrape.js
+//
+// ⚠️ La API key es de Traveleez (machu-picchu.org), no nuestra. Si algún día la
+//    rotan/bloquean, esto deja de funcionar: cámbiala abajo en API_KEY (o saca
+//    la nuestra propia en machupicchuapi.com). Está aislada a propósito acá arriba.
 // ============================================================================
 
 const https = require('https');
 const fs = require('fs');
 
-// ---- Config de la fuente (sacada del cURL real de la web) -------------------
-const ENDPOINT = 'https://caminoincamachupicchu.org/cmingutd/wp-admin/admin-ajax.php';
-const CALENDARIO = '9U7W';            // data-iden-calendar del widget
-const GRUPO = '-1';
-const PERCENTAGE = '100';
+// ---- CONFIG (lo único que tocarías si cambia algo) -------------------------
+const ENDPOINT = 'https://api.machupicchuapi.com/v5/inca-trail/';
+const API_KEY = '188cda8f-566c-4d37-b837-90a7acc094fc'; // key prestada (Traveleez) — cambiar acá si se cae
+const ORIGIN_DOMAIN = 'machu-picchu.org';
+
+// Las dos rutas que probaste (1 y 5). Por los datos sabremos cuál es cuál:
+// el Camino Inca 4 días se agota MUCHO más en temporada alta que el de 2 días.
+// Si al ver el dashboard los nombres salen cambiados, solo intercámbialos aquí.
 const TICKETS = [
-  { id: 'DH', name: 'Camino Inca 4 días Clásico', cap: 500 },
-  { id: 'eB', name: 'Camino Inca - km 104 - Chachabamba', cap: 250 },
+  { route: '1', id: 'R1', name: 'Camino Inca 4 días Clásico' },
+  { route: '5', id: 'R5', name: 'Camino Inca 2 días (km 104)' },
 ];
 
 const OUT = process.env.OUT || 'camino_inca.json';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
 
 const pad = (n) => String(n).padStart(2, '0');
-const daysInMonth = (y, m) => new Date(y, m, 0).getDate(); // m en base 1
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(...a);
 
-// ---- Un POST al AJAX --------------------------------------------------------
-function fetchSlice(ubicacion, anio, mes) {
+// ---- Un POST a la API (una ruta + un mes) ----------------------------------
+function fetchMonth(route, anio, mes) {
   const body =
-    `action=update-calendar&ubicacion=${ubicacion}&calendario=${CALENDARIO}` +
-    `&anio=${anio}&mes=${pad(mes)}&grupo=${GRUPO}&percentage=${PERCENTAGE}`;
+    `apikey=${encodeURIComponent(API_KEY)}&route=${route}` +
+    `&date=${anio}-${pad(mes)}-01&origin_domain=${encodeURIComponent(ORIGIN_DOMAIN)}`;
   const opts = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Content-Length': Buffer.byteLength(body),
-      'X-Requested-With': 'XMLHttpRequest',
-      'Origin': 'https://caminoincamachupicchu.org',
-      'Referer': 'https://caminoincamachupicchu.org/disponibilidad-camino-inca-machu-picchu/',
+      'Origin': 'https://widget.machupicchuapi.com',
+      'Referer': 'https://widget.machupicchuapi.com/',
       'User-Agent': UA,
       'Accept': '*/*',
     },
@@ -58,34 +64,33 @@ function fetchSlice(ubicacion, anio, mes) {
       res.on('end', () => {
         let json = null;
         try { json = JSON.parse(d); } catch (e) {}
-        resolve({ status: res.statusCode, json, raw: d });
+        resolve({ status: res.statusCode, json });
       });
     });
-    req.on('error', (e) => resolve({ status: 0, json: null, raw: '', error: e.message }));
-    req.setTimeout(20000, () => { req.destroy(); resolve({ status: 0, json: null, raw: '', error: 'timeout' }); });
+    req.on('error', (e) => resolve({ status: 0, json: null, error: e.message }));
+    req.setTimeout(20000, () => { req.destroy(); resolve({ status: 0, json: null, error: 'timeout' }); });
     req.write(body);
     req.end();
   });
 }
 
-// ---- Parser: cantidades -> { 'YYYY-MM-DD': cupos } --------------------------
-// (función pura, testeable sin red — ver selftest.js)
-function buildDays(json, anio, mes) {
-  const dim = daysInMonth(anio, mes);
+// ---- Parser: data[] (date DD-MM-YYYY, total) -> { 'YYYY-MM-DD': cupos } ------
+function buildDays(json) {
   const days = {};
-  const c = (json && json.cantidades) || {};
-  for (let d = 1; d <= dim; d++) {
-    if (c[d] === undefined || c[d] === null) continue; // sin dato ese día
-    days[`${anio}-${pad(mes)}-${pad(d)}`] = Number(c[d]); // "0" -> 0
+  const arr = (json && json.data) || [];
+  for (const row of arr) {
+    if (!row || !row.date) continue;
+    const [dd, mm, yyyy] = String(row.date).split('-'); // DD-MM-YYYY
+    if (!yyyy) continue;
+    days[`${yyyy}-${mm}-${dd}`] = Number(row.total);
   }
   return days;
 }
 
-// ---- Rango de meses: mes actual -> diciembre 2027 ---------------------------
+// ---- Rango de meses: mes actual -> diciembre 2027 --------------------------
 function targetMonths() {
   const now = new Date();
-  let y = now.getFullYear();
-  let m = now.getMonth() + 1; // base 1
+  let y = now.getFullYear(), m = now.getMonth() + 1;
   const endY = 2027, endM = 12;
   const out = [];
   while (y < endY || (y === endY && m <= endM)) {
@@ -97,10 +102,10 @@ function targetMonths() {
 
 // ---- Main -------------------------------------------------------------------
 async function main() {
-  log('== Camino Inca colector ==');
+  log('== Camino Inca colector v2 (MachuPicchuAPI) ==');
   const t0 = Date.now();
 
-  // cargar previo (no perder lo bueno)
+  // cargar previo (no perder lo bueno si una rebanada falla)
   let prev = {};
   try {
     const p = JSON.parse(fs.readFileSync(OUT, 'utf8'));
@@ -108,7 +113,7 @@ async function main() {
     log('previo cargado:', Object.keys(prev).join(',') || '(nada)');
   } catch (e) { log('sin previo'); }
 
-  // podar meses pasados de lo previo
+  // podar meses pasados
   const now = new Date();
   const cut = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
   Object.values(prev).forEach((t) => {
@@ -118,44 +123,47 @@ async function main() {
 
   const result = {
     updated: new Date().toISOString(),
-    source: 'caminoincamachupicchu.org (Ministerio de Cultura - DRC Cusco)',
+    source: 'MachuPicchuAPI (machupicchuapi.com) — datos del Ministerio de Cultura / SERNANP',
     tickets: [],
   };
 
   const months = targetMonths();
   let okSlices = 0, badSlices = 0;
+  const nowIso = new Date().toISOString();
 
   for (const ticket of TICKETS) {
     const pr = prev[ticket.id] || {};
     const t = {
-      id: ticket.id,
-      name: ticket.name,
-      cap: ticket.cap,
-      days: Object.assign({}, pr.days),   // arranca con lo previo
-      conf: Object.assign({}, pr.conf),   // sello "última actualización" por mes
+      id: ticket.id, name: ticket.name, cap: 0,
+      days: Object.assign({}, pr.days),
+      conf: Object.assign({}, pr.conf),
     };
     for (const { anio, mes } of months) {
-      const r = await fetchSlice(ticket.id, anio, mes);
+      const r = await fetchMonth(ticket.route, anio, mes);
       const key = `${anio}-${pad(mes)}`;
-      if (r.status === 200 && r.json && r.json.completado == 1 && r.json.cantidades) {
-        const days = buildDays(r.json, anio, mes);
-        Object.assign(t.days, days);                 // superpone solo este mes
-        if (r.json.update) t.conf[key] = r.json.update; // sello del Ministerio
+      if (r.status === 200 && r.json && r.json.error === false && Array.isArray(r.json.data) && r.json.data.length) {
+        const days = buildDays(r.json);
+        Object.assign(t.days, days);
+        t.conf[key] = nowIso; // sello = cuándo consultamos (la API no da fecha del Ministerio)
         okSlices++;
-        log(`  ok  ${ticket.id} ${key}  (${Object.keys(days).length} días, update ${r.json.update || '?'})`);
+        const max = Math.max(0, ...Object.values(days));
+        log(`  ok  ${ticket.id} ${key}  (${Object.keys(days).length} días, máx ${max})`);
       } else {
         badSlices++;
-        log(`  --  ${ticket.id} ${key}  sin dato (status ${r.status}${r.error ? ', ' + r.error : ''}) -> conservo lo previo`);
+        log(`  --  ${ticket.id} ${key}  sin dato (status ${r.status}${r.error ? ', ' + r.error : ''}) -> conservo previo`);
       }
-      await sleep(300); // cortesía: no martillar la web
+      await sleep(250);
     }
+    // cap = mayor cupo observado (día más lleno) → para colorear de forma realista
+    t.cap = Math.max(1, ...Object.values(t.days).map((v) => Number(v) || 0));
     result.tickets.push(t);
   }
 
   fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
-  log(`\n💾 ${OUT} escrito. ${okSlices} rebanadas ok, ${badSlices} sin dato | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  log(`\n💾 ${OUT} escrito. ${okSlices} ok, ${badSlices} sin dato | ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  log('Caps detectados:', result.tickets.map((t) => `${t.id}=${t.cap}`).join(' '));
 }
 
 if (require.main === module) main();
 
-module.exports = { buildDays, daysInMonth, targetMonths };
+module.exports = { buildDays, targetMonths };
