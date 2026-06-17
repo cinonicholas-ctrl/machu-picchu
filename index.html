@@ -48,7 +48,8 @@
   .detail{background:var(--panel2);border:1px solid var(--sel);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:none}
   .dhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .dhead .dtitle{font-weight:700;font-size:15px;text-transform:capitalize}
-  .dhead #dclose{margin-left:auto}
+  #resizer{flex:0 0 6px;cursor:col-resize;background:var(--line)}
+  #resizer:hover{background:#3d4f5e}
   .dhead button{padding:4px 12px;font-size:15px}
   .dboxes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-width:920px}
   .dbox{border:1px solid var(--line);border-radius:9px;padding:6px 8px;cursor:pointer}
@@ -98,7 +99,7 @@
 </header>
 
 <div class="layout">
-  <aside class="side">
+  <aside class="side" id="side">
     <a class="buybtn" href="https://tuboleto.cultura.pe/dashboard/agencia/inicio" target="_blank" rel="noopener">🎟️ Comprar en Tu Boleto ↗</a>
     <h3>Mes</h3>
     <div class="monthrow"><button id="prev">‹</button><div class="month" id="monthlbl">—</div><button id="next">›</button></div>
@@ -112,7 +113,9 @@
     <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk">Todos los tickets</label></div>
     <div class="sub" style="margin:0 0 8px;font-size:11px">☑ izq = ver calendario &nbsp;·&nbsp; 📅 der = resumen por mes</div>
     <div id="picker"></div>
+    <div class="sub" style="font-size:10px;margin-top:12px">TA = solo en temporada alta</div>
   </aside>
+  <div id="resizer"></div>
   <main>
     <div class="note" id="note"></div>
     <div class="detail" id="detail"><div class="dhead"></div><div class="dboxes"></div></div>
@@ -125,6 +128,8 @@
 <script>
 const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu"};
+const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
 let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), firstLoad=true, selDate=null;
 
 const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
@@ -148,6 +153,7 @@ function buildSample(){
 async function loadData(){
   try{ const r=await fetch('data.json?t='+Date.now()); if(!r.ok)throw 0; DATA=await r.json(); MODE=DATA.sample?"sample-file":"real"; }
   catch(e){ DATA=buildSample(); MODE="local"; }
+  DATA.routes.sort((a,b)=>(a.id||"").localeCompare(b.id||"",undefined,{numeric:true}));
   const set=new Set(); DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
   months=[...set].sort();
   if(curIdx>=months.length)curIdx=0;
@@ -175,7 +181,7 @@ function renderPicker(){
       p.appendChild(g);
     }
     const row=document.createElement("div");row.className="opt";
-    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</label><input type="checkbox" class="mchkr" title="Resumen por mes" ${monthSel.has(rt.id)?"checked":""}>`;
+    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${shortName(rt)}</label><input type="checkbox" class="mchkr" title="Resumen por mes" ${monthSel.has(rt.id)?"checked":""}>`;
     const ins=row.querySelectorAll("input");
     ins[0].onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderPicker();renderBlocks();};
     ins[1].onchange=e=>{e.target.checked?monthSel.add(rt.id):monthSel.delete(rt.id);renderMonthly();};
@@ -189,7 +195,7 @@ function renderDetail(){
   dp.style.display="block";
   const key=keyOf(selDate);
   const ds=selDate.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  dp.querySelector(".dhead").innerHTML=`<button id="dprev" title="día anterior">‹</button><button id="dnext" title="día siguiente">›</button><div class="dtitle">${ds}</div><button id="dclose" title="cerrar">✕</button>`;
+  dp.querySelector(".dhead").innerHTML=`<button id="dclose" title="cerrar">✕</button><button id="dprev" title="día anterior">‹</button><button id="dnext" title="día siguiente">›</button><div class="dtitle">${ds}</div>`;
   let html="";
   DATA.routes.forEach(rt=>{
     const v=rt.days[key];
@@ -197,7 +203,7 @@ function renderDetail(){
     if(v===null){cls="dead";num="Agotado";tip+="Agotado / no disponible";}
     else if(v&&Object.keys(v).length){const tot=Object.values(v).reduce((a,b)=>a+(b||0),0);cls=tot>0?"ok":"dead";num=tot>0?tot+" cupos":"Agotado";tip+=rt.slots.map(s=>v[s]!=null?`${s}:00  →  ${v[s]}`:null).filter(Boolean).join("\n")||"sin horarios";}
     else {tip+="sin dato (no verificado)";}
-    html+=`<div class="dbox ${cls}${selected.has(rt.id)?' on':''}" data-id="${rt.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${(rt.name.split('· ')[1]||"")}</div></div>`;
+    html+=`<div class="dbox ${cls}${selected.has(rt.id)?' on':''}" data-id="${rt.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${shortName(rt)}</div></div>`;
   });
   dp.querySelector(".dboxes").innerHTML=html;
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
@@ -250,7 +256,7 @@ function renderBlocks(){
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
     let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
     const b=document.createElement("div");b.className="block";
-    b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</span> ${pill} ${fresh}
+    b.innerHTML=`<div class="bh"><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
       <span class="tag">${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
@@ -291,6 +297,16 @@ document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=
 // clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
 document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
 document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;curIdx=+el.dataset.mi;renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
+
+// ancho ajustable del sidebar (arrastrar el borde; se recuerda)
+(function(){
+  const side=document.getElementById("side"); const rz=document.getElementById("resizer");
+  const saved=localStorage.getItem("mp_sideW"); if(saved){side.style.width=saved+"px";side.style.minWidth=saved+"px";}
+  let drag=false;
+  rz.addEventListener("mousedown",()=>{drag=true;document.body.style.userSelect="none";});
+  document.addEventListener("mousemove",e=>{if(!drag)return;const w=Math.min(520,Math.max(170,e.clientX));side.style.width=w+"px";side.style.minWidth=w+"px";});
+  document.addEventListener("mouseup",()=>{if(drag){drag=false;document.body.style.userSelect="";localStorage.setItem("mp_sideW",parseInt(side.style.width));}});
+})();
 
 (async()=>{await loadData();renderPicker();renderBlocks();renderDetail();renderMonthly();})();
 </script>
