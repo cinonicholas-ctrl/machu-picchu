@@ -65,17 +65,18 @@
 <header>
   <h1>🥾 Disponibilidad Camino Inca</h1>
   <span class="badge" id="freshbadge">cargando…</span>
+  <a href="index.html" style="margin-left:auto;background:#1e2731;border:1px solid #2a3744;color:#e6edf3;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;text-decoration:none">🏔️ Machu Picchu →</a>
 </header>
 
 <div class="wrap">
 
   <div class="source">
     ℹ️ <b>Sobre estos datos:</b> no existe una web oficial del Ministerio de Cultura que publique en línea
-    la disponibilidad del Camino Inca con acceso directo para nosotros. La información que ves aquí proviene de
-    <a href="https://caminoincamachupicchu.org/disponibilidad-camino-inca-machu-picchu/" target="_blank" rel="noopener">caminoincamachupicchu.org</a>
-    (de la agencia Machupicchu Terra), que mostramos porque <b>nos parece de confianza</b>: publica el calendario
-    oficial indicando la fecha de su última actualización del Ministerio de Cultura – DRC Cusco.
-    Aun así, <b>confirma siempre antes de reservar</b>.
+    la disponibilidad del Camino Inca con acceso directo para nosotros. Los cupos que ves aquí vienen de
+    <a href="https://machupicchuapi.com" target="_blank" rel="noopener">MachuPicchuAPI</a>, la API de disponibilidad
+    que usan varias agencias de Cusco y que refleja los datos del Ministerio de Cultura / SERNANP (cupos reales por día:
+    <b>0 = agotado</b>). La mostramos porque sus números son consistentes con la realidad. Aun así,
+    <b>confirma siempre antes de reservar</b>.
   </div>
 
   <div class="controls">
@@ -146,7 +147,7 @@ function render(){
   const pub=!!stamp;
   document.getElementById('cap').innerHTML=`Cupo máx/día: <b style="color:var(--txt)">${t.cap}</b>`;
   document.getElementById('upd').innerHTML = pub
-    ? `Última actualización (Ministerio): <b>${fmtDate(stamp)}</b>`
+    ? `Datos consultados: <b>${fmtDate(stamp)}</b>`
     : `<span class="pill warn">Sin publicar</span>`;
 
   const um=document.getElementById('unpubmsg');
@@ -220,7 +221,7 @@ fetch('camino_inca.json?t='+Date.now()).then(r=>r.json()).then(d=>{
   fb.style.background = hrs<=8 ? '#1a9850' : '#b8860b';
   // pie
   document.getElementById('foot').innerHTML =
-    `El robot revisa la web fuente cada 6 horas y guarda los cupos por día. Datos por cortesía del Ministerio de Cultura – Dirección Regional de Cultura de Cusco, vía caminoincamachupicchu.org. Esta es una herramienta interna de referencia; confirma la disponibilidad antes de cerrar cualquier reserva.`;
+    `El robot consulta MachuPicchuAPI cada 6 horas y guarda los cupos por día. Datos del Ministerio de Cultura / SERNANP vía MachuPicchuAPI (machupicchuapi.com). Esta es una herramienta interna de referencia; confirma la disponibilidad antes de cerrar cualquier reserva.`;
   YM=defaultYM();
   setTicket(d.tickets[0].id);
 }).catch(e=>{
