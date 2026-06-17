@@ -104,8 +104,7 @@
 <body>
 <header>
   <h1>🏔️ Disponibilidad Machu Picchu</h1>
-  <a href="camino-inca.html" style="background:#1e2731;border:1px solid #2a3744;color:#e6edf3;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;text-decoration:none">🥾 Ir a Camino Inca</a>
-  <span class="badge" id="srcbadge" style="margin-left:auto"></span>
+  <span class="badge" id="srcbadge"></span>
 </header>
 
 <div class="layout">
@@ -138,7 +137,8 @@
 <script>
 const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu"};
+const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu","I4":"Camino Inca 4 días","I2":"Camino Inca 2 días (km104)"};
+const slotLabel=s=>/^\d+$/.test(s)?s+":00":s; // horarios MP = "06:00"; Camino Inca = "Salida"
 const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
 let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null, detCollapsed=false, monCollapsed=false, blockCollapsed=new Set(), allCollapsed=false;
 
@@ -164,6 +164,19 @@ function buildSample(){
 async function loadData(){
   try{ const r=await fetch('data.json?t='+Date.now()); if(!r.ok)throw 0; DATA=await r.json(); MODE=DATA.sample?"sample-file":"real"; }
   catch(e){ DATA=buildSample(); MODE="local"; }
+  // --- Camino Inca: se suma como 2 tickets más (I4/I2) leyendo camino_inca.json.
+  //     Aislado: si falla, el dashboard de Machu Picchu sigue igual. No toca data.json.
+  try{
+    const cr=await fetch('camino_inca.json?t='+Date.now());
+    if(cr.ok){ const cj=await cr.json();
+      (cj.tickets||[]).forEach(t=>{
+        const days={};
+        for(const k in (t.days||{})){ const v=Number(t.days[k]); days[k]=(v>0)?{'Salida':v}:null; } // 0 = agotado
+        if(!DATA.routes.some(r=>r.id===t.id))
+          DATA.routes.push({id:t.id,group:'Camino Inca',name:t.name,slots:['Salida'],cap:t.cap||1,days,conf:t.conf||{}});
+      });
+    }
+  }catch(e){ /* sin Camino Inca, no pasa nada */ }
   DATA.routes.sort((a,b)=>(a.id||"").localeCompare(b.id||"",undefined,{numeric:true}));
   const set=new Set(); DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
   months=[...set].sort();
@@ -220,7 +233,7 @@ function renderDetail(){
     const v=rt.days[key];
     let cls="na",num="—",tip=rt.id+" · "+ds+"\n";
     if(v===null){cls="dead";num="Agotado";tip+="Agotado / no disponible";}
-    else if(v&&Object.keys(v).length){const tot=Object.values(v).reduce((a,b)=>a+(b||0),0);cls=tot>0?"ok":"dead";num=tot>0?tot+" cupos":"Agotado";tip+=rt.slots.map(s=>v[s]!=null?`${s}:00  →  ${v[s]}`:null).filter(Boolean).join("\n")||"sin horarios";}
+    else if(v&&Object.keys(v).length){const tot=Object.values(v).reduce((a,b)=>a+(b||0),0);cls=tot>0?"ok":"dead";num=tot>0?tot+" cupos":"Agotado";tip+=rt.slots.map(s=>v[s]!=null?`${slotLabel(s)}  →  ${v[s]}`:null).filter(Boolean).join("\n")||"sin horarios";}
     else {tip+="sin dato (no verificado)";}
     html+=`<div class="dbox ${cls}${selected.has(rt.id)?' on':''}" data-id="${rt.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${shortName(rt)}</div></div>`;
   });
@@ -267,7 +280,7 @@ function renderMonthly(){
 }
 function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
-    ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles."
+    ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles. &nbsp;·&nbsp; <b>I4/I2 (Camino Inca)</b>: 1 salida/día, datos de MachuPicchuAPI."
     :"👀 Datos de muestra para mostrar el formato.";
   document.getElementById("updated").textContent=ago(DATA.updated);
   srcBadge();
@@ -280,6 +293,11 @@ function renderBlocks(){
   if(!sel.length){host.innerHTML='<div class="empty">Marca al menos un tipo de ticket a la izquierda.</div>';return;}
   sel.forEach(rt=>{
     const mi=mIdx(rt.id);const [Y,M]=months[mi].split('-').map(Number);const y=Y,m=M-1,nd=daysIn(y,m);
+    if(!Object.keys(rt.days).some(k=>k.slice(0,7)===months[mi])){
+      const b=document.createElement("div");b.className="block";
+      b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><button class="bmnav" data-mprev="${rt.id}" title="mes anterior">‹</button><button class="bmnav" data-mnext="${rt.id}" title="mes siguiente">›</button><span class="nm">${rt.id} · ${shortName(rt)}</span> <span class="tag"><b>${MONTHS[m]} ${y}</b> · sin datos para este mes</span></div><div class="empty" style="padding:14px 4px">— este ticket no tiene datos para ${MONTHS[m]} ${y} —</div>`;
+      host.appendChild(b);return;
+    }
     let diasCupo=0,diasAgot=0,prox=null;
     for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm&&Object.keys(sm).length){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
     const ratio=diasCupo/nd;
@@ -297,12 +315,12 @@ function renderBlocks(){
     for(let d=1;d<=nd;d++){const dk=`${y}-${pad(m+1)}-${pad(d)}`;const dow=new Date(y,m,d).getDay();const ws=dow===1?" weekstart":"";const sd=(selKey===dk)?" selcol":"";h+=`<th class='ch${ws}${sd}' data-d='${dk}' style='cursor:pointer'>${d}<span class='dow'>${DOW[dow]}</span></th>`;}
     h+="</tr>";t.innerHTML=h;
     rt.slots.forEach(s=>{
-      const tr=t.insertRow();const rhc=tr.insertCell();rhc.className="rh";rhc.textContent=s+":00";
+      const tr=t.insertRow();const rhc=tr.insertCell();rhc.className="rh";rhc.textContent=slotLabel(s);
       for(let d=1;d<=nd;d++){
         const key=`${y}-${pad(m+1)}-${pad(d)}`;const sm=rt.days[key];const dow=new Date(y,m,d).getDay();
         const td=tr.insertCell();td.className="cell"+(dow===1?" weekstart":"")+(selKey===key?" selcol":"");td.dataset.d=key;td.style.cursor="pointer";
         if(!sm||!Object.keys(sm).length){td.className+=" dead";}
-        else{const v=sm[s]??0;td.style.background=color(v,rt.cap||100);td.textContent=v>0?v:"";td.dataset.tip=`${rt.id} · ${d} ${MONTHS[m]} · ${s}:00 · ${v} cupos`;}
+        else{const v=sm[s]??0;td.style.background=color(v,rt.cap||100);td.textContent=v>0?v:"";td.dataset.tip=`${rt.id} · ${d} ${MONTHS[m]} · ${slotLabel(s)} · ${v} cupos`;}
       }
     });
     b.appendChild(t);
