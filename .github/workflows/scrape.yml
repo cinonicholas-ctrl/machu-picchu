@@ -2,13 +2,22 @@ name: Robot Machu Picchu
 
 on:
   workflow_dispatch:
+    inputs:
+      circuito:
+        description: "Qué actualizar"
+        type: choice
+        default: Todos
+        options:
+          - Todos
+          - Circuito 1
+          - Circuito 2
+          - Circuito 3
   schedule:
     - cron: '0 */3 * * *'
 
 permissions:
   contents: write
 
-# Evita que dos corridas se pisen (una a la vez)
 concurrency:
   group: scrape-machupicchu
   cancel-in-progress: false
@@ -24,8 +33,8 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps chromium
 
-      # Cada circuito reintenta hasta 3 veces; si falla, espera 5 min y reintenta
       - name: Circuito 1
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.circuito == 'Todos' || inputs.circuito == 'Circuito 1' }}
         continue-on-error: true
         run: |
           for i in 1 2 3; do
@@ -33,8 +42,11 @@ jobs:
             echo "Circuito 1 intento $i falló; espero 5 min y reintento..."
             sleep 300
           done
+      - if: ${{ github.event_name != 'workflow_dispatch' || inputs.circuito == 'Todos' }}
+        run: sleep 20
 
       - name: Circuito 2
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.circuito == 'Todos' || inputs.circuito == 'Circuito 2' }}
         continue-on-error: true
         run: |
           for i in 1 2 3; do
@@ -42,8 +54,11 @@ jobs:
             echo "Circuito 2 intento $i falló; espero 5 min y reintento..."
             sleep 300
           done
+      - if: ${{ github.event_name != 'workflow_dispatch' || inputs.circuito == 'Todos' }}
+        run: sleep 20
 
       - name: Circuito 3
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.circuito == 'Todos' || inputs.circuito == 'Circuito 3' }}
         continue-on-error: true
         run: |
           for i in 1 2 3; do
