@@ -30,8 +30,8 @@ const ORIGIN_DOMAIN = 'machu-picchu.org';
 // el Camino Inca 4 días se agota MUCHO más en temporada alta que el de 2 días.
 // Si al ver el dashboard los nombres salen cambiados, solo intercámbialos aquí.
 const TICKETS = [
-  { route: '1', id: 'R1', name: 'Camino Inca 4 días Clásico' },
-  { route: '5', id: 'R5', name: 'Camino Inca 2 días (km 104)' },
+  { route: '1', id: 'I4', name: 'Camino Inca 4 días Clásico' },     // I4 = clásico 4 días
+  { route: '5', id: 'I2', name: 'Camino Inca 2 días (km 104)' },    // I2 = corto 2 días
 ];
 
 const OUT = process.env.OUT || 'camino_inca.json';
@@ -87,11 +87,13 @@ function buildDays(json) {
   return days;
 }
 
-// ---- Rango de meses: mes actual -> diciembre 2027 --------------------------
+// ---- Rango de meses: mes actual -> enero 2027 ------------------------------
+// (los permisos del Camino Inca están disponibles hasta ~enero 2027; más allá
+//  todavía no se libera, así que no tiene sentido pedir esos meses).
 function targetMonths() {
   const now = new Date();
   let y = now.getFullYear(), m = now.getMonth() + 1;
-  const endY = 2027, endM = 12;
+  const endY = 2027, endM = 1;
   const out = [];
   while (y < endY || (y === endY && m <= endM)) {
     out.push({ anio: y, mes: m });
