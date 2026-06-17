@@ -117,7 +117,7 @@
     </div>
     <div class="sub" id="updated" style="margin:10px 0 4px"></div>
 
-    <h3>Tipo de ticket</h3>
+    <h3 style="display:flex;align-items:center;gap:8px">Tipo de ticket <button id="toggleall" title="Plegar / desplegar todos los paneles" style="margin-left:auto;font-size:11px;padding:2px 8px">⇕ Plegar todo</button></h3>
     <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk" style="flex:1">Todos los tickets</label><span id="mchkR" title="Resumen por mes de todos">📅 todos</span></div>
     <div class="sub" style="margin:0 0 8px;font-size:11px">☑ izq = ver calendario &nbsp;·&nbsp; 📅 der = resumen por mes</div>
     <div id="picker"></div>
@@ -138,7 +138,7 @@ const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu"};
 const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null, detCollapsed=false, monCollapsed=false, blockCollapsed=new Set();
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null, detCollapsed=false, monCollapsed=false, blockCollapsed=new Set(), allCollapsed=false;
 
 const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
 const pad=n=>String(n).padStart(2,'0');
@@ -316,6 +316,14 @@ document.addEventListener("mouseover",e=>{const t=e.target.closest&&e.target.clo
 document.addEventListener("mousemove",e=>{if(tip.style.display==="block"){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY+14)+"px";}});
 document.addEventListener("mouseout",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)tip.style.display="none";});
 
+document.getElementById("toggleall").onclick=()=>{
+  allCollapsed=!allCollapsed;
+  detCollapsed=allCollapsed;monCollapsed=allCollapsed;
+  blockCollapsed=new Set();
+  if(allCollapsed)DATA.routes.forEach(r=>blockCollapsed.add(r.id));
+  document.getElementById("toggleall").textContent=allCollapsed?"⇕ Desplegar todo":"⇕ Plegar todo";
+  renderDetail();renderMonthly();renderBlocks();
+};
 document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;routeMonth={};renderBlocks();renderMonthly();}};
 document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;routeMonth={};renderBlocks();renderMonthly();}};
 document.getElementById("datego").onclick=()=>{
