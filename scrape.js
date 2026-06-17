@@ -5,6 +5,11 @@ const fs = require('fs');
 const URL = `https://tuboleto.cultura.pe/${process.env.TICKET || 'llaqta_machupicchu'}`;
 const CIRCUITS = (process.env.CIRCUITS || 'Circuito 1|Circuito 2|Circuito 3').split('|');
 const MONTHS = parseInt(process.env.MONTHS || '7');
+// MODO REBANADA: si pasamos MONTH=YYYY-MM, raspamos SOLO ese mes y escribimos a OUT.
+// Así cada job (circuito+mes) corre en su propia IP con poca carga. El merge junta todo.
+const OUT = process.env.OUT || 'data.json';
+const MONTH = (process.env.MONTH || '').trim();
+const SLICE = /^\d{4}-\d{2}$/.test(MONTH);
 
 const INIT = `
 (() => {
@@ -22,11 +27,15 @@ const pad = (n) => String(n).padStart(2, '0');
 const MAB = { ENE: 0, FEB: 1, MAR: 2, ABR: 3, MAY: 4, JUN: 5, JUL: 6, AGO: 7, SET: 8, SEP: 8, OCT: 9, NOV: 10, DIC: 11 };
 const daysInMonth = (y, mo) => new Date(y, mo + 1, 0).getDate();
 
-// cargar datos previos (para no borrar lo bueno)
+// cargar datos previos (para no borrar lo bueno). En modo rebanada NO cargamos prev:
+// solo producimos la rebanada (un circuito + un mes) y el merge la superpone.
 let prev = {};
-try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || []).forEach(r => prev[r.id] = r); log('prev cargado:', Object.keys(prev).join(',')); } catch (e) { log('sin prev'); }
-// limpiar meses ya pasados de lo previo (solo guardamos del mes actual en adelante)
-{ const n = new Date(); const cut = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`; Object.values(prev).forEach(r => { if (r && r.days) { for (const k in r.days) { if (k.slice(0, 7) < cut) delete r.days[k]; } } }); }
+if (!SLICE) {
+  try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || []).forEach(r => prev[r.id] = r); log('prev cargado:', Object.keys(prev).join(',')); } catch (e) { log('sin prev'); }
+  // limpiar meses ya pasados de lo previo (solo guardamos del mes actual en adelante)
+  const n = new Date(); const cut = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  Object.values(prev).forEach(r => { if (r && r.days) { for (const k in r.days) { if (k.slice(0, 7) < cut) delete r.days[k]; } } });
+}
 
 (async () => {
   log('======= v15 resiliente =======', CIRCUITS.join(','), 'meses:', MONTHS);
@@ -122,7 +131,8 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
   const result = { updated: new Date().toISOString(), ticket: process.env.TICKET || 'llaqta_machupicchu', sample: false, routes: [] };
   // del mes actual hasta diciembre de este año (cada mes que pasa, la corrida es más corta)
   const now = new Date(); const targets = [];
-  for (let mo = now.getMonth(); mo <= 11; mo++) targets.push({ y: now.getFullYear(), mo });
+  if (SLICE) { targets.push({ y: +MONTH.slice(0, 4), mo: +MONTH.slice(5, 7) - 1 }); }
+  else { for (let mo = now.getMonth(); mo <= 11; mo++) targets.push({ y: now.getFullYear(), mo }); }
 
   for (const circuit of CIRCUITS) {
     if (blocked) break;
@@ -147,6 +157,7 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
         okMonths++;
         const en = new Set(await enabledDays());
         for (let d = 1; d <= daysInMonth(y, mo); d++) {
+          if (blocked) break;
           const key = `${y}-${pad(mo + 1)}-${pad(d)}`;
           if (!en.has(String(d))) { route.days[key] = null; continue; }
           await ensureOnMonth(y, mo);
@@ -162,7 +173,7 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
       // escribir merge (incluye rutas previas no tocadas)
       const seen = new Set(result.routes.map(r => r.id));
       const merged = result.routes.concat(Object.values(prev).filter(r => !seen.has(r.id)));
-      fs.writeFileSync('data.json', JSON.stringify(Object.assign({}, result, { routes: merged })));
+      fs.writeFileSync(OUT, JSON.stringify(Object.assign({}, result, { routes: merged })));
       log(`  ${id}: ${okMonths} meses ok, ${badMonths} sin confirmar | ${((Date.now() - tR) / 60000).toFixed(1)} min`);
     }
   }
@@ -170,9 +181,11 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
   // asegurar que TODAS las rutas previas sigan en el archivo
   const seen = new Set(result.routes.map(r => r.id));
   result.routes = result.routes.concat(Object.values(prev).filter(r => !seen.has(r.id)));
-  fs.writeFileSync('data.json', JSON.stringify(result));
+  fs.writeFileSync(OUT, JSON.stringify(result));
   fs.writeFileSync('capture.json', JSON.stringify({ blocked, mins: ((Date.now() - t0) / 60000).toFixed(1), rutas: result.routes.map(r => r.id) }, null, 2));
   log('\\n💾 data.json (merge). Rutas:', result.routes.map(r => r.id).join(','), '| bloqueado:', blocked, '|', ((Date.now() - t0) / 60000).toFixed(1), 'min');
   await browser.close();
   log('== fin v15 ==');
+  // si hubo 403, salgo con error: ya no se recupera en esta sesión, mejor que el workflow espere y reintente
+  if (blocked) { log('⛔ 403 detectado — paro aquí para no perder tiempo; el workflow esperará y reintentará.'); process.exit(1); }
 })();
