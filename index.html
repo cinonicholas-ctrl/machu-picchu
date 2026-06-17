@@ -50,11 +50,12 @@
   .dhead .dtitle{font-weight:700;font-size:15px;text-transform:capitalize}
   .dhead #dclose{margin-left:auto}
   .dhead button{padding:4px 12px;font-size:15px}
-  .dboxes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-  .dbox{border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:default}
-  .dbox .dbid{font-weight:700;font-size:13px}
-  .dbox .dbnum{font-size:18px;font-weight:750;margin:2px 0}
-  .dbox .dbnm{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dboxes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-width:920px}
+  .dbox{border:1px solid var(--line);border-radius:9px;padding:6px 8px;cursor:pointer}
+  .dbox.on{outline:2px solid var(--sel);outline-offset:-1px}
+  .dbox .dbid{font-weight:700;font-size:12px}
+  .dbox .dbnum{font-size:15px;font-weight:750;margin:1px 0}
+  .dbox .dbnm{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dbox.ok{background:rgba(26,152,80,.16);border-color:rgba(26,152,80,.4)}
   .dbox.dead{background:repeating-linear-gradient(45deg,#222c35,#222c35 5px,#283440 5px,#283440 10px);color:#7c8b97}
   .dbox.na{opacity:.45}
@@ -182,7 +183,7 @@ function renderDetail(){
     if(v===null){cls="dead";num="Agotado";tip+="Agotado / no disponible";}
     else if(v&&Object.keys(v).length){const tot=Object.values(v).reduce((a,b)=>a+(b||0),0);cls=tot>0?"ok":"dead";num=tot>0?tot+" cupos":"Agotado";tip+=rt.slots.map(s=>v[s]!=null?`${s}:00  →  ${v[s]}`:null).filter(Boolean).join("\n")||"sin horarios";}
     else {tip+="sin dato (no verificado)";}
-    html+=`<div class="dbox ${cls}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${(rt.name.split('· ')[1]||"")}</div></div>`;
+    html+=`<div class="dbox ${cls}${selected.has(rt.id)?' on':''}" data-id="${rt.id}" data-tip="${tip.replace(/"/g,'&quot;')}"><div class="dbid">${rt.id}</div><div class="dbnum">${num}</div><div class="dbnm">${(rt.name.split('· ')[1]||"")}</div></div>`;
   });
   dp.querySelector(".dboxes").innerHTML=html;
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
@@ -254,6 +255,9 @@ document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++
 document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
 document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
 document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){document.getElementById("mchk").checked=!document.getElementById("mchk").checked;} const on=DATA.routes.every(r=>selected.has(r.id)); if(on)selected.clear(); else DATA.routes.forEach(r=>selected.add(r.id)); renderPicker();renderBlocks(); };
+
+// clic en una caja de ticket del panel del día → muestra/oculta ese ticket en los calendarios de abajo
+document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=e.target.closest("[data-id]");if(!el)return;const id=el.dataset.id;selected.has(id)?selected.delete(id):selected.add(id);renderPicker();renderBlocks();renderDetail();});
 
 // clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
 document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();window.scrollTo({top:0,behavior:'smooth'});});
