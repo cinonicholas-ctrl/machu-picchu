@@ -83,12 +83,24 @@ try { const p = JSON.parse(fs.readFileSync('data.json', 'utf8')); (p.routes || [
     }
     return false;
   }
-  // navega y CONFIRMA que el sitio respondió la disponibilidad de ese mes
+  // navega y CONFIRMA esperando la respuesta REAL del sitio para ese mes
   async function navConfirm(y, mo) {
-    const before = fechasOk;
-    if (!(await navTo(y, mo))) return false;
-    for (let i = 0; i < 12 && fechasOk === before && !blocked; i++) await sleep(300);
-    return fechasOk > before && !blocked;
+    await openCal();
+    for (let i = 0; i < 24; i++) {
+      const p = parseP(await period());
+      if (!p) { await sleep(350); continue; }
+      if (p.y === y && p.mo === mo) return true; // llegamos; la respuesta del mes ya se esperó en el paso anterior
+      const fwd = (y > p.y) || (y === p.y && mo > p.mo);
+      const b = page.locator(fwd ? '.mat-calendar-next-button' : '.mat-calendar-previous-button').first();
+      if (!(await b.count())) return false;
+      const [resp] = await Promise.all([
+        page.waitForResponse(r => /consulta-fechas-disponibles/.test(r.url()), { timeout: 8000 }).catch(() => null),
+        b.click().catch(() => {})
+      ]);
+      if (resp && resp.status() === 403) { blocked = true; return false; }
+      await sleep(250);
+    }
+    return false;
   }
   async function ensureOnMonth(y, mo) { await openCal(); const p = parseP(await period()); if (!p || p.y !== y || p.mo !== mo) await navTo(y, mo); }
   const enabledDays = () => page.evaluate(() => [...document.querySelectorAll('.mat-calendar-body-cell')].filter(c => !c.classList.contains('mat-calendar-body-disabled') && c.getAttribute('aria-disabled') !== 'true').map(c => c.innerText.trim()));
