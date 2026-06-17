@@ -59,6 +59,16 @@
   .dbox.ok{background:rgba(26,152,80,.16);border-color:rgba(26,152,80,.4)}
   .dbox.dead{background:repeating-linear-gradient(45deg,#222c35,#222c35 5px,#283440 5px,#283440 10px);color:#7c8b97}
   .dbox.na{opacity:.45}
+  .opt label{flex:1}
+  .mchkr{accent-color:var(--sel)!important}
+  .monthly{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:none}
+  .mrow{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+  .mrow .mlab{min-width:34px;font-weight:700;font-size:13px;padding-top:6px}
+  .mboxes2{display:flex;gap:6px;flex-wrap:wrap}
+  .mbox{border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;text-align:center;min-width:78px}
+  .mbox .mm{font-size:10px;text-transform:capitalize;opacity:.85}
+  .mbox .mn{font-weight:750;font-size:14px}
+  .mbox.cur{outline:2px solid var(--sel);outline-offset:-1px}
   .block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow:auto}
   .bh{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
   .bh .nm{font-weight:700;font-size:15px}
@@ -100,11 +110,13 @@
 
     <h3>Tipo de ticket</h3>
     <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk">Todos los tickets</label></div>
+    <div class="sub" style="margin:0 0 8px;font-size:11px">☑ izq = ver calendario &nbsp;·&nbsp; 📅 der = resumen por mes</div>
     <div id="picker"></div>
   </aside>
   <main>
     <div class="note" id="note"></div>
     <div class="detail" id="detail"><div class="dhead"></div><div class="dboxes"></div></div>
+    <div class="monthly" id="monthly"></div>
     <div id="blocks"></div>
   </main>
 </div>
@@ -113,7 +125,7 @@
 <script>
 const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), firstLoad=true, selDate=null;
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), firstLoad=true, selDate=null;
 
 const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
 const pad=n=>String(n).padStart(2,'0');
@@ -163,8 +175,10 @@ function renderPicker(){
       p.appendChild(g);
     }
     const row=document.createElement("div");row.className="opt";
-    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</label>`;
-    row.querySelector("input").onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderPicker();renderBlocks();};
+    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${rt.name.split('· ')[1]||rt.name}</label><input type="checkbox" class="mchkr" title="Resumen por mes" ${monthSel.has(rt.id)?"checked":""}>`;
+    const ins=row.querySelectorAll("input");
+    ins[0].onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderPicker();renderBlocks();};
+    ins[1].onchange=e=>{e.target.checked?monthSel.add(rt.id):monthSel.delete(rt.id);renderMonthly();};
     p.appendChild(row);
   });
 }
@@ -190,7 +204,7 @@ function renderDetail(){
   document.getElementById("dnext").onclick=()=>shiftDay(1);
   document.getElementById("dclose").onclick=()=>{selDate=null;renderDetail();renderBlocks();};
 }
-function shiftDay(n){if(!selDate)return;selDate=new Date(selDate.getTime()+n*86400000);syncMonth();renderDetail();renderBlocks();}
+function shiftDay(n){if(!selDate)return;selDate=new Date(selDate.getTime()+n*86400000);syncMonth();renderDetail();renderBlocks();renderMonthly();}
 function syncMonth(){if(!selDate)return;const i=months.indexOf(keyOf(selDate).slice(0,7));if(i>=0)curIdx=i;}
 function jumpDate(str){
   const dd=(str||"").replace(/\D/g,"");if(dd.length<4)return;
@@ -198,9 +212,24 @@ function jumpDate(str){
   if(dd.length>=8)year=+dd.slice(4,8); else if(dd.length>=6)year=2000+ +dd.slice(4,6);
   else{const n=new Date();year=n.getFullYear();if(new Date(year,mon-1,day)<new Date(n.getFullYear(),n.getMonth(),n.getDate()))year++;}
   if(!day||!mon||mon>12||day>31)return;
-  selDate=new Date(year,mon-1,day);syncMonth();renderDetail();renderBlocks();
+  selDate=new Date(year,mon-1,day);syncMonth();renderDetail();renderBlocks();renderMonthly();
 }
 
+function renderMonthly(){
+  const mp=document.getElementById("monthly");
+  const rs=DATA.routes.filter(r=>monthSel.has(r.id));
+  if(!rs.length){mp.style.display="none";mp.innerHTML="";return;}
+  mp.style.display="block";
+  let html=`<div style="font-weight:700;margin-bottom:8px">Resumen por mes <span class="sub">— clic en un mes para llevar los calendarios a ese mes</span></div>`;
+  rs.forEach(rt=>{
+    let maxT=1;
+    const totals=months.map(mk=>{let t=0;for(const k in rt.days){if(k.indexOf(mk)===0){const v=rt.days[k];if(v&&typeof v==="object")t+=Object.values(v).reduce((a,b)=>a+(b||0),0);}}if(t>maxT)maxT=t;return t;});
+    let boxes="";
+    months.forEach((mk,i)=>{const yy=mk.slice(2,4),mm=+mk.slice(5,7);const t=totals[i];const bg=t>0?color(t,maxT):"var(--zero)";const cur=i===curIdx?" cur":"";const dark=t>0?'#08120c':'var(--muted)';boxes+=`<div class="mbox${cur}" data-mi="${i}" style="background:${bg}"><div class="mm" style="color:${dark}">${MONTHS[mm-1].slice(0,3)} ${yy}</div><div class="mn" style="color:${t>0?'#08120c':'#6a7e8e'}">${t>0?t.toLocaleString('es-PE'):'—'}</div></div>`;});
+    html+=`<div class="mrow"><div class="mlab">${rt.id}</div><div class="mboxes2">${boxes}</div></div>`;
+  });
+  mp.innerHTML=html;
+}
 function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
     ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles."
@@ -250,8 +279,8 @@ document.addEventListener("mouseover",e=>{const t=e.target.closest&&e.target.clo
 document.addEventListener("mousemove",e=>{if(tip.style.display==="block"){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY+14)+"px";}});
 document.addEventListener("mouseout",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)tip.style.display="none";});
 
-document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;renderBlocks();}};
-document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;renderBlocks();}};
+document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;renderBlocks();renderMonthly();}};
+document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;renderBlocks();renderMonthly();}};
 document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
 document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
 document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){document.getElementById("mchk").checked=!document.getElementById("mchk").checked;} const on=DATA.routes.every(r=>selected.has(r.id)); if(on)selected.clear(); else DATA.routes.forEach(r=>selected.add(r.id)); renderPicker();renderBlocks(); };
@@ -260,9 +289,10 @@ document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){docume
 document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=e.target.closest("[data-id]");if(!el)return;const id=el.dataset.id;selected.has(id)?selected.delete(id):selected.add(id);renderPicker();renderBlocks();renderDetail();});
 
 // clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
-document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById("blocks").addEventListener("click",e=>{const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;curIdx=+el.dataset.mi;renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
 
-(async()=>{await loadData();renderPicker();renderBlocks();renderDetail();})();
+(async()=>{await loadData();renderPicker();renderBlocks();renderDetail();renderMonthly();})();
 </script>
 </body>
 </html>
