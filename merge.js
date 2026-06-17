@@ -17,7 +17,9 @@ for (const f of files) {
   try { slice = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { continue; }
   (slice.routes || []).forEach(sr => {
     let r = byId[sr.id];
-    if (!r) { r = { id: sr.id, group: sr.group, name: sr.name, slots: [], cap: 0, days: {}, updated: sr.updated }; byId[sr.id] = r; base.routes.push(r); }
+    if (!r) { r = { id: sr.id, group: sr.group, name: sr.name, slots: [], cap: 0, conf: {}, days: {}, updated: sr.updated }; byId[sr.id] = r; base.routes.push(r); }
+    // sellos de confirmación por mes: la rebanada solo trae los meses que confirmó AHORA
+    r.conf = Object.assign(r.conf || {}, sr.conf || {});
     // superponer SOLO los días que la rebanada tiene
     for (const k in (sr.days || {})) {
       const v = sr.days[k];
@@ -40,7 +42,10 @@ for (const f of files) {
 
 // podar meses ya pasados
 { const n = new Date(); const cut = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
-  base.routes.forEach(r => { for (const k in r.days) { if (k.slice(0, 7) < cut) delete r.days[k]; } }); }
+  base.routes.forEach(r => {
+    for (const k in r.days) { if (k.slice(0, 7) < cut) delete r.days[k]; }
+    if (r.conf) for (const k in r.conf) { if (k < cut) delete r.conf[k]; }
+  }); }
 
 base.updated = new Date().toISOString();
 base.sample = false;
