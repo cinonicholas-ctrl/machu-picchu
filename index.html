@@ -73,6 +73,7 @@
   .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
   .mhead button{padding:3px 10px}
   .blockx{padding:2px 9px;align-self:center}
+  .bmnav{padding:2px 8px;align-self:center;font-size:14px}
   .block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow:auto}
   .bh{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
   .bh .nm{font-weight:700;font-size:15px}
@@ -133,11 +134,12 @@ const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu"};
 const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
-let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), firstLoad=true, selDate=null;
+let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null;
 
 const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
 const pad=n=>String(n).padStart(2,'0');
 const keyOf=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const mIdx=id=>routeMonth[id]!=null?routeMonth[id]:curIdx;
 
 function buildSample(){
  const routes=[
@@ -218,7 +220,7 @@ function renderDetail(){
   document.getElementById("dclose").onclick=()=>{selDate=null;renderDetail();renderBlocks();};
 }
 function shiftDay(n){if(!selDate)return;selDate=new Date(selDate.getTime()+n*86400000);syncMonth();renderDetail();renderBlocks();renderMonthly();}
-function syncMonth(){if(!selDate)return;const i=months.indexOf(keyOf(selDate).slice(0,7));if(i>=0)curIdx=i;}
+function syncMonth(){if(!selDate)return;const i=months.indexOf(keyOf(selDate).slice(0,7));if(i>=0)curIdx=i;routeMonth={};}
 function jumpDate(str){
   const dd=(str||"").replace(/\D/g,"");if(dd.length<4)return;
   const day=+dd.slice(0,2),mon=+dd.slice(2,4);let year;
@@ -240,7 +242,7 @@ function renderMonthly(){
     let boxes="";
     months.forEach((mk,i)=>{
       const yy=+mk.slice(0,4),mm=+mk.slice(5,7);const t=totals[i];
-      const bg=t>0?color(t,maxT):"var(--zero)";const cur=i===curIdx?" cur":"";
+      const bg=t>0?color(t,maxT):"var(--zero)";const cur=(selected.has(rt.id)&&i===mIdx(rt.id))?" cur":"";
       let dl="";for(let d=1;d<=daysIn(yy,mm-1);d++){const v=rt.days[`${yy}-${pad(mm)}-${pad(d)}`];if(v&&typeof v==="object"){const s=Object.values(v).reduce((a,b)=>a+(b||0),0);if(s>0)dl+=`${d} ${MONTHS[mm-1].slice(0,3)} → ${s}\n`;}}
       const tip=`${rt.id} · ${MONTHS[mm-1]} ${yy}\n`+(dl||"sin cupos");
       boxes+=`<div class="mbox${cur}" data-id="${rt.id}" data-mi="${i}" data-tip="${tip.replace(/"/g,'&quot;')}" style="background:${bg}"><div class="mm" style="color:${t>0?'#08120c':'var(--muted)'}">${MONTHS[mm-1].slice(0,3)} ${String(yy).slice(2)}</div><div class="mn" style="color:${t>0?'#08120c':'#6a7e8e'}">${t>0?t.toLocaleString('es-PE'):'—'}</div></div>`;
@@ -257,21 +259,22 @@ function renderBlocks(){
   document.getElementById("updated").textContent=ago(DATA.updated);
   srcBadge();
   if(!months.length){document.getElementById("blocks").innerHTML='<div class="empty">No hay datos cargados.</div>';return;}
-  const [Y,M]=months[curIdx].split('-').map(Number);const y=Y,m=M-1,nd=daysIn(y,m);
-  document.getElementById("monthlbl").textContent=MONTHS[m]+" "+y;
+  const gm=months[curIdx].split('-').map(Number);
+  document.getElementById("monthlbl").textContent=MONTHS[gm[1]-1]+" "+gm[0];
   const selKey=selDate?keyOf(selDate):null;
   const host=document.getElementById("blocks");host.innerHTML="";
   const sel=DATA.routes.filter(r=>selected.has(r.id));
   if(!sel.length){host.innerHTML='<div class="empty">Marca al menos un tipo de ticket a la izquierda.</div>';return;}
   sel.forEach(rt=>{
+    const mi=mIdx(rt.id);const [Y,M]=months[mi].split('-').map(Number);const y=Y,m=M-1,nd=daysIn(y,m);
     let diasCupo=0,diasAgot=0,prox=null;
     for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm&&Object.keys(sm).length){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
     const ratio=diasCupo/nd;
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
     let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
     const b=document.createElement("div");b.className="block";
-    b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
-      <span class="tag">${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
+    b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><button class="bmnav" data-mprev="${rt.id}" title="mes anterior">‹</button><button class="bmnav" data-mnext="${rt.id}" title="mes siguiente">›</button><span class="nm">${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
+      <span class="tag"><b>${MONTHS[m]} ${y}</b> · ${diasCupo} días con cupo · ${diasAgot} agotados · próx. libre: ${prox?prox+' '+MONTHS[m]:'—'}</span></div>`;
     const t=document.createElement("table");
     let h="<tr><th class='rh'>Hora</th>";
     for(let d=1;d<=nd;d++){const dk=`${y}-${pad(m+1)}-${pad(d)}`;const dow=new Date(y,m,d).getDay();const ws=dow===1?" weekstart":"";const sd=(selKey===dk)?" selcol":"";h+=`<th class='ch${ws}${sd}' data-d='${dk}' style='cursor:pointer'>${d}<span class='dow'>${DOW[dow]}</span></th>`;}
@@ -299,8 +302,8 @@ document.addEventListener("mouseover",e=>{const t=e.target.closest&&e.target.clo
 document.addEventListener("mousemove",e=>{if(tip.style.display==="block"){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY+14)+"px";}});
 document.addEventListener("mouseout",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)tip.style.display="none";});
 
-document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;renderBlocks();renderMonthly();}};
-document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;renderBlocks();renderMonthly();}};
+document.getElementById("prev").onclick=()=>{if(curIdx>0){curIdx--;routeMonth={};renderBlocks();renderMonthly();}};
+document.getElementById("next").onclick=()=>{if(curIdx<months.length-1){curIdx++;routeMonth={};renderBlocks();renderMonthly();}};
 document.getElementById("datego").onclick=()=>jumpDate(document.getElementById("datebox").value);
 document.getElementById("datebox").addEventListener("keydown",e=>{if(e.key==="Enter")jumpDate(e.target.value);});
 document.getElementById("master").onclick=(e)=>{ if(e.target.id!=="mchk"){document.getElementById("mchk").checked=!document.getElementById("mchk").checked;} const on=DATA.routes.every(r=>selected.has(r.id)); if(on)selected.clear(); else DATA.routes.forEach(r=>selected.add(r.id)); renderPicker();renderBlocks(); };
@@ -310,10 +313,12 @@ document.querySelector("#detail .dboxes").addEventListener("click",e=>{const el=
 
 // clic en cualquier día del calendario de abajo → actualiza el panel de detalle de arriba
 document.getElementById("blocks").addEventListener("click",e=>{
+  const mpv=e.target.closest("[data-mprev]");if(mpv){const id=mpv.dataset.mprev;routeMonth[id]=Math.max(0,mIdx(id)-1);renderBlocks();renderMonthly();return;}
+  const mnx=e.target.closest("[data-mnext]");if(mnx){const id=mnx.dataset.mnext;routeMonth[id]=Math.min(months.length-1,mIdx(id)+1);renderBlocks();renderMonthly();return;}
   const xb=e.target.closest("[data-x]");
   if(xb){selected.delete(xb.dataset.x);renderPicker();renderBlocks();renderMonthly();return;}
   const el=e.target.closest("[data-d]");if(!el)return;const p=el.dataset.d.split('-').map(Number);selDate=new Date(p[0],p[1]-1,p[2]);syncMonth();renderDetail();renderBlocks();renderMonthly();window.scrollTo({top:0,behavior:'smooth'});});
-document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;if(el.dataset.id)selected.add(el.dataset.id);curIdx=+el.dataset.mi;renderPicker();renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
+document.getElementById("monthly").addEventListener("click",e=>{const el=e.target.closest("[data-mi]");if(!el)return;const id=el.dataset.id,i=+el.dataset.mi;if(selected.has(id)&&mIdx(id)===i){selected.delete(id);}else{selected.add(id);routeMonth[id]=i;}renderPicker();renderBlocks();renderMonthly();document.getElementById("blocks").scrollIntoView({behavior:"smooth",block:"start"});});
 
 // ancho ajustable del sidebar (arrastrar el borde; se recuerda)
 (function(){
