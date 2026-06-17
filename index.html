@@ -173,10 +173,14 @@ function renderPicker(){
   DATA.routes.forEach(rt=>{
     if(rt.group!==lastG){
       lastG=rt.group;
-      const ids=DATA.routes.filter(r=>r.group===rt.group).map(r=>r.id);
+      const grpRoutes=DATA.routes.filter(r=>r.group===rt.group);
+      const ids=grpRoutes.map(r=>r.id);
       const gOn=ids.every(id=>selected.has(id));
+      const ups=grpRoutes.map(r=>r.updated?new Date(r.updated).getTime():0).filter(Boolean);
+      let fr="";
+      if(ups.length){const h=(Date.now()-Math.min(...ups))/3.6e6;fr=` · <b style="color:${h<8?'#7ee0a3':'#fdc98b'}">${h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d')}</b>`;}
       const g=document.createElement("div");g.className="grp";
-      g.innerHTML=`<span>${rt.group}</span><span class="gt">${gOn?'quitar todos':'marcar todos'}</span>`;
+      g.innerHTML=`<span>${rt.group}${fr}</span><span class="gt">${gOn?'quitar todos':'marcar todos'}</span>`;
       g.onclick=()=>{const on=ids.every(id=>selected.has(id));ids.forEach(id=>on?selected.delete(id):selected.add(id));renderPicker();renderBlocks();};
       p.appendChild(g);
     }
