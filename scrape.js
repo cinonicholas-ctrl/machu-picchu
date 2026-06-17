@@ -146,7 +146,7 @@ if (!SLICE) {
       const id = idm ? idm[1] + idm[2] : ruta.slice(0, 6);
       const desc = ruta.includes(':') ? ruta.split(':')[1].trim() : ruta;
       const pr = prev[id] || { days: {}, slots: [], cap: 0 };
-      const route = { id, group: circuit, name: `Circuito ${id[0]}-${id[1]} · ${desc}`, slots: [], cap: pr.cap || 0, updated: new Date().toISOString(), meses: targets.length, mesesOk: 0, days: Object.assign({}, pr.days) };
+      const route = { id, group: circuit, name: `Circuito ${id[0]}-${id[1]} · ${desc}`, slots: [], cap: pr.cap || 0, updated: new Date().toISOString(), meses: targets.length, mesesOk: 0, conf: Object.assign({}, pr.conf || {}), days: Object.assign({}, pr.days) };
       const slotSet = new Set(pr.slots || []);
       let okMonths = 0, badMonths = 0;
       const tR = Date.now();
@@ -155,6 +155,7 @@ if (!SLICE) {
         const confirmed = await navConfirm(y, mo);
         if (!confirmed) { badMonths++; continue; } // mes no confirmado: conservo lo previo
         okMonths++;
+        route.conf[`${y}-${pad(mo + 1)}`] = new Date().toISOString(); // sello: este mes se confirmó AHORA
         const en = new Set(await enabledDays());
         for (let d = 1; d <= daysInMonth(y, mo); d++) {
           if (blocked) break;
