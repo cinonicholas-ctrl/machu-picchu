@@ -1,12 +1,11 @@
 name: Robot Camino Inca
 
-# MODO PRUEBA: por ahora SOLO se lanza a mano (workflow_dispatch), nunca solo.
-# Así no se cruza jamás con el Robot Machu Picchu. Cuando confirmemos que todo
-# está bien, descomenta el bloque "schedule" de abajo para que corra cada 6h.
+# Corre solo cada 6h (minuto 30, a propósito distinto del robot MP para no cruzarse)
+# y también cuando lo lanzas a mano desde la pestaña Actions.
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '30 */6 * * *'   # minuto 30 a propósito, para no coincidir con el robot MP
+  schedule:
+    - cron: '30 */6 * * *'
 
 permissions:
   contents: write
