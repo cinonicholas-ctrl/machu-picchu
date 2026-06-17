@@ -139,6 +139,7 @@ const DOW=["D","L","M","M","J","V","S"];
 const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const NAMES={"1A":"Montaña","1B":"Terraza Superior","1C":"Intipunku (TA)","1D":"Puente Inca (TA)","2A":"Clásico","2B":"Terraza Inferior","3A":"Waynapicchu","3B":"Realeza","3C":"Gran Caverna (TA)","3D":"Huchuy Picchu","I4":"Camino Inca 4 días","I2":"Camino Inca 2 días (km104)"};
 const slotLabel=s=>/^\d+$/.test(s)?s+":00":s; // horarios MP = "06:00"; Camino Inca = "Salida"
+const MAX_MONTH="2027-01"; // tope de VISUALIZACIÓN: no mostrar meses después de enero 2027 (cambiar cada año)
 const shortName=rt=>NAMES[rt.id]||(rt.name.split('· ')[1]||rt.name);
 let DATA=null, MODE="real", months=[], curIdx=0, selected=new Set(), monthSel=new Set(), routeMonth={}, firstLoad=true, selDate=null, detCollapsed=false, monCollapsed=false, blockCollapsed=new Set(), allCollapsed=false;
 
@@ -179,7 +180,7 @@ async function loadData(){
   }catch(e){ /* sin Camino Inca, no pasa nada */ }
   DATA.routes.sort((a,b)=>(a.id||"").localeCompare(b.id||"",undefined,{numeric:true}));
   const set=new Set(); DATA.routes.forEach(rt=>Object.keys(rt.days).forEach(k=>set.add(k.slice(0,7))));
-  months=[...set].sort();
+  months=[...set].sort().filter(m=>m<=MAX_MONTH);
   if(curIdx>=months.length)curIdx=0;
   if(firstLoad){ const i=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length))); if(i>=0)curIdx=i; DATA.routes.forEach(r=>monthSel.add(r.id)); firstLoad=false; }
 }
