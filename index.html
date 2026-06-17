@@ -67,15 +67,16 @@
   .opt label{flex:1}
   .mchkr{accent-color:var(--sel)!important}
   .monthly{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;display:none}
-  .mrow{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
-  .mrow .mlab{min-width:34px;font-weight:700;font-size:13px;padding-top:6px}
-  .mboxes2{display:flex;gap:4px;flex-wrap:wrap}
-  .mbox{border:1px solid var(--line);border-radius:7px;padding:3px 6px;cursor:pointer;text-align:center;min-width:56px}
-  .mbox .mm{font-size:9px;text-transform:capitalize;opacity:.85}
-  .mbox .mn{font-weight:750;font-size:13px}
-  .mbox.cur{outline:3px solid var(--sel);outline-offset:-1px}
-  .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-  .mhead button{padding:3px 10px}
+  .mrow{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  .mrow .mlab{min-width:26px;font-weight:700;font-size:11px}
+  .mboxes2{display:flex;gap:3px;flex-wrap:wrap}
+  .mbox{border:1px solid var(--line);border-radius:6px;padding:2px 5px;cursor:pointer;text-align:center;min-width:48px;line-height:1.15}
+  .mbox .mm{font-size:8px;text-transform:capitalize;opacity:.8}
+  .mbox .mn{font-weight:750;font-size:12px}
+  .mbox.cur{outline:2px solid var(--sel);outline-offset:-1px}
+  .mhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .mhead button{padding:2px 9px}
+  .mscroll{max-height:42vh;overflow:auto}
   .blockx{padding:2px 9px;align-self:center}
   .bmnav{padding:2px 8px;align-self:center;font-size:14px}
   .block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow:auto}
@@ -167,7 +168,7 @@ async function loadData(){
   months=[...set].sort();
   if(curIdx>=months.length)curIdx=0;
   if(!selected.size) selected=new Set(DATA.routes.slice(0,2).map(r=>r.id));
-  if(firstLoad){ const i=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length))); if(i>=0)curIdx=i; firstLoad=false; }
+  if(firstLoad){ const i=months.findIndex(m=>DATA.routes.some(rt=>Object.entries(rt.days).some(([k,v])=>k.startsWith(m)&&v&&Object.keys(v).length))); if(i>=0)curIdx=i; DATA.routes.forEach(r=>monthSel.add(r.id)); firstLoad=false; }
 }
 
 function srcBadge(){const b=document.getElementById("srcbadge");if(MODE==="real"){b.className="badge real";b.textContent="DATOS REALES";}else if(MODE==="sample-file"){b.className="badge sample";b.textContent="DATOS DE MUESTRA";}else{b.className="badge sample";b.textContent="MUESTRA (vista local)";}}
@@ -189,9 +190,9 @@ function renderPicker(){
       const ids=grpRoutes.map(r=>r.id);
       const gOnL=ids.every(id=>selected.has(id));
       const gOnR=ids.every(id=>monthSel.has(id));
-      const ups=grpRoutes.map(r=>r.updated?new Date(r.updated).getTime():0).filter(Boolean);
+      const ups=[];grpRoutes.forEach(r=>{if(r.conf)Object.values(r.conf).forEach(t=>ups.push(new Date(t).getTime()));});
       let fr="";
-      if(ups.length){const h=(Date.now()-Math.min(...ups))/3.6e6;fr=` · <b style="color:${h<8?'#7ee0a3':'#fdc98b'}">${h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d')}</b>`;}
+      if(ups.length){const h=(Date.now()-Math.min(...ups))/3.6e6;fr=` · <b style="color:${h<14?'#7ee0a3':'#ff8f8f'}" title="el mes más viejo de este circuito">${h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d')}</b>`;}
       const g=document.createElement("div");g.className="grp";
       g.innerHTML=`<span>${rt.group}${fr}</span><span class="gacts"><span class="gt" data-gl>${gOnL?'quitar':'marcar'}</span><span class="gt" data-gr style="color:${gOnR?'var(--sel)':''}">📅 ${gOnR?'quitar':'marcar'}</span></span>`;
       g.querySelector('[data-gl]').onclick=()=>{ids.forEach(id=>gOnL?selected.delete(id):selected.add(id));renderPicker();renderBlocks();renderMonthly();};
@@ -247,7 +248,7 @@ function renderMonthly(){
   if(!rs.length){mp.style.display="none";mp.innerHTML="";return;}
   mp.style.display="block";
   let html=`<div class="mhead"><button id="mclose" title="cerrar">✕</button><b id="montitle" style="cursor:pointer" title="clic para plegar/desplegar">${monCollapsed?'▸':'▾'} Resumen por mes</b><span class="sub">— clic en un mes para verlo</span></div>`;
-  if(!monCollapsed) rs.forEach(rt=>{
+  if(!monCollapsed){ html+='<div class="mscroll">'; rs.forEach(rt=>{
     const totals=months.map(mk=>{let t=0;for(const k in rt.days){if(k.indexOf(mk)===0){const v=rt.days[k];if(v&&typeof v==="object")t+=Object.values(v).reduce((a,b)=>a+(b||0),0);}}return t;});
     const maxT=Math.max(1,...totals);
     let boxes="";
@@ -259,7 +260,7 @@ function renderMonthly(){
       boxes+=`<div class="mbox${cur}" data-id="${rt.id}" data-mi="${i}" data-tip="${tip.replace(/"/g,'&quot;')}" style="background:${bg}"><div class="mm" style="color:${t>0?'#08120c':'var(--muted)'}">${MONTHS[mm-1].slice(0,3)} ${String(yy).slice(2)}</div><div class="mn" style="color:${t>0?'#08120c':'#6a7e8e'}">${t>0?t.toLocaleString('es-PE'):'—'}</div></div>`;
     });
     html+=`<div class="mrow"><div class="mlab">${rt.id}</div><div class="mboxes2">${boxes}</div></div>`;
-  });
+  }); html+='</div>'; }
   mp.innerHTML=html;
   const mc=document.getElementById("mclose");if(mc)mc.onclick=()=>{monthSel.clear();renderMonthly();renderPicker();};
   const mt=document.getElementById("montitle");if(mt)mt.onclick=()=>{monCollapsed=!monCollapsed;renderMonthly();};
@@ -283,7 +284,9 @@ function renderBlocks(){
     for(let d=1;d<=nd;d++){const sm=rt.days[`${y}-${pad(m+1)}-${pad(d)}`];if(sm&&Object.keys(sm).length){diasCupo++;if(prox===null)prox=d;}else diasAgot++;}
     const ratio=diasCupo/nd;
     const pill=ratio>0.7?'<span class="pill ok">holgado</span>':ratio>0.4?'<span class="pill low">ajustado</span>':'<span class="pill no">crítico</span>';
-    let fresh="";if(rt.updated){const h=(Date.now()-new Date(rt.updated).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ act. hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
+    let fresh="";const mk=months[mi];const cAt=rt.conf&&rt.conf[mk];
+    if(cAt){const h=(Date.now()-new Date(cAt).getTime())/3.6e6;fresh=h<14?`<span class="pill ok">✓ ${MONTHS[m]} confirmado hace ${h<1?'<1':Math.round(h)} h</span>`:`<span class="pill no">⚠ ${MONTHS[m]} sin refrescar hace ${h<48?Math.round(h)+' h':Math.round(h/24)+' d'}</span>`;}
+    else{fresh=`<span class="pill no">⚠ ${MONTHS[m]} sin confirmar aún</span>`;}
     const collapsed=blockCollapsed.has(rt.id);
     const b=document.createElement("div");b.className="block";
     b.innerHTML=`<div class="bh"><button class="blockx" data-x="${rt.id}" title="quitar este ticket">✕</button><button class="bmnav" data-mprev="${rt.id}" title="mes anterior">‹</button><button class="bmnav" data-mnext="${rt.id}" title="mes siguiente">›</button><span class="nm" data-collapse="${rt.id}" style="cursor:pointer" title="clic para plegar/desplegar">${collapsed?'▸':'▾'} ${rt.id} · ${shortName(rt)}</span> ${pill} ${fresh}
