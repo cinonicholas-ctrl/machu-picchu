@@ -232,9 +232,31 @@ function renderPicker(){
       const ids=grpRoutes.map(r=>r.id);
       const gOnL=ids.every(id=>selected.has(id));
       const gOnR=ids.every(id=>monthSel.has(id));
-      const ups=[];grpRoutes.forEach(r=>{if(r.conf)Object.values(r.conf).forEach(t=>ups.push(new Date(t).getTime()));});
-      let fr="";
-      if(ups.length){const h=(Date.now()-Math.min(...ups))/3.6e6;fr=` · <b style="color:${h<14?'#7ee0a3':'#ff8f8f'}" title="el mes más viejo de este circuito">${h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d')}</b>`;}
+      // frescura del circuito: muestra lo MÁS reciente; si algún mes/ruta quedó viejo, lo especifica
+      let fr=""; {
+        const NOW=Date.now(), TH=14, abbr=a=>a.slice().sort((x,y)=>x-y).map(m=>MONTHS[m-1].slice(0,3)).join(', ');
+        let freshest=0; const staleByRoute=[];
+        grpRoutes.forEach(r=>{
+          const ms=[];
+          months.forEach(mk=>{
+            if(!Object.keys(r.days||{}).some(k=>k.slice(0,7)===mk))return;
+            const c=r.conf&&r.conf[mk], t=c?new Date(c).getTime():0;
+            if(t>freshest)freshest=t;
+            if(!c||(NOW-t)/3.6e6>=TH)ms.push(+mk.slice(5,7));
+          });
+          if(ms.length)staleByRoute.push({id:r.id,ms});
+        });
+        if(freshest){
+          const fh=(NOW-freshest)/3.6e6, age=fh<1?'<1h':(fh<48?Math.round(fh)+'h':Math.round(fh/24)+'d');
+          if(!staleByRoute.length){ fr=` · <span style="color:#7ee0a3">✓ hace ${age}</span>`; }
+          else{
+            const sig=s=>s.ms.slice().sort((x,y)=>x-y).join(',');
+            const allSame=staleByRoute.length===grpRoutes.length && staleByRoute.every(s=>sig(s)===sig(staleByRoute[0]));
+            const det=allSame?abbr(staleByRoute[0].ms):staleByRoute.map(s=>`${s.id} ${abbr(s.ms)}`).join(' · ');
+            fr=` · hace ${age} <span style="color:#ff8f8f" title="meses sin refrescar (≥${TH}h)">⚠ ${det}</span>`;
+          }
+        }
+      }
       const g=document.createElement("div");g.className="grp";
       g.innerHTML=`<span>${rt.group}${fr}</span><span class="gacts"><span class="gt" data-gl>${gOnL?'quitar':'marcar'}</span><span class="gt" data-gr style="color:${gOnR?'var(--sel)':''}">📅 ${gOnR?'quitar':'marcar'}</span></span>`;
       g.querySelector('[data-gl]').onclick=()=>{ids.forEach(id=>gOnL?selected.delete(id):selected.add(id));renderPicker();renderBlocks();renderMonthly();};
