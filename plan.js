@@ -26,9 +26,11 @@ if (SEL === 'Solo bloqueados') {
       if (!routes.length) {
         incomplete = true; // no tenemos nada de ese circuito todavía
       } else {
-        // un mes está "completo" si CADA ruta tiene SELLO de confirmación para ese mes
+        // un mes está "completo" si CADA ruta tiene SELLO FRESCO (no solo presente) para ese mes
+        const TH = 14 * 3.6e6; // ≥14h sin refrescar = volver a correrlo (igual que el reporte/dashboard)
         for (const r of routes) {
-          if (!r.conf || !r.conf[mk]) { incomplete = true; break; }
+          const c = r.conf && r.conf[mk];
+          if (!c || (Date.now() - new Date(c).getTime()) >= TH) { incomplete = true; break; }
         }
       }
       if (incomplete) combos.push({ c, m: mk });
