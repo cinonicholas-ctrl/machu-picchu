@@ -187,38 +187,10 @@ async function loadData(){
 function srcBadge(){const b=document.getElementById("srcbadge");if(MODE==="real"){b.className="badge real";b.textContent="DATOS REALES";}else if(MODE==="sample-file"){b.className="badge sample";b.textContent="DATOS DE MUESTRA";}else{b.className="badge sample";b.textContent="MUESTRA (vista local)";}}
 function ago(iso){if(!iso)return"";const d=(Date.now()-new Date(iso).getTime())/60000;if(d<2)return"Actualizado: hace un momento";if(d<90)return"Actualizado: hace "+Math.round(d)+" min";return"Actualizado: hace "+Math.round(d/60)+" h";}
 function color(v,cap){if(v<=0)return"var(--zero)";const r=v/cap;if(r>0.55)return"var(--g1)";if(r>0.4)return"var(--g2)";if(r>0.28)return"var(--g3)";if(r>0.18)return"var(--y1)";if(r>0.10)return"var(--o1)";if(r>0.03)return"var(--r1)";return"var(--r2)";}
-// salud de datos: por circuito, qué meses NO se refrescaron (conf más viejo que el umbral)
-function dataHealth(){
-  const now=Date.now(), TH=14; // horas: igual que el pill por bloque
-  const byGroup={}; // "Circuito N" -> Set(mes 1..12 sin refrescar)
-  DATA.routes.forEach(rt=>{
-    if(!rt.group||!rt.group.startsWith('Circuito'))return; // Camino Inca tiene su propio sello aparte
-    months.forEach(mk=>{
-      if(!Object.keys(rt.days||{}).some(k=>k.slice(0,7)===mk))return; // sin datos de ese mes: no evaluar
-      const c=rt.conf&&rt.conf[mk];
-      const h=c?(now-new Date(c).getTime())/3.6e6:Infinity;
-      if(h>=TH)(byGroup[rt.group]=byGroup[rt.group]||new Set()).add(+mk.slice(5,7));
-    });
-  });
-  return byGroup;
-}
-// reloj de arriba: cuándo corrió el robot + aviso claro de qué quedó sin refrescar
-function renderUpdated(){
-  const el=document.getElementById("updated");
-  const run=ago(DATA.updated);
-  if(MODE!=="real"){el.innerHTML=run;return;}
-  const hg=dataHealth(), groups=Object.keys(hg).sort();
-  if(!groups.length){el.innerHTML=`<div>${run}</div><div style="color:#7ee0a3;margin-top:3px">✓ Todos los circuitos al día</div>`;return;}
-  const parts=groups.map(g=>{
-    const ms=[...hg[g]].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(', ');
-    return `${g.replace('Circuito ','C')} (${ms})`;
-  }).join(' · ');
-  el.innerHTML=`<div>${run}</div><div style="color:#ff8f8f;margin-top:3px" title="Estos circuitos+meses no se refrescaron en la última corrida. Corre el robot con la opción 'Solo bloqueados' para completarlos.">⚠ Sin refrescar: ${parts}</div>`;
-}
-
 // frescura por circuito y por ticket, según los sellos conf por mes
 function freshness(){
   const groups={}, groupFresh={}, routeLag={};
+  if(MODE!=="real") return {groupFresh, routeLag}; // en muestra/local no evaluamos frescura
   DATA.routes.forEach(r=>{(groups[r.group]=groups[r.group]||[]).push(r);});
   Object.keys(groups).forEach(g=>{
     let fresh=0;
@@ -232,7 +204,7 @@ function freshness(){
       months.forEach(mk=>{
         if(!Object.keys(r.days||{}).some(k=>k.slice(0,7)===mk))return;
         const c=r.conf&&r.conf[mk], t=c?new Date(c).getTime():0;
-        if(fresh && (!t || (fresh-t)>2*3.6e6)) lag.push(+mk.slice(5,7));
+        if(!t || (Date.now()-t)>=14*3.6e6) lag.push(+mk.slice(5,7)); // viejo de verdad (≥14h), igual que el reporte
       });
       routeLag[r.id]=lag;
     });
