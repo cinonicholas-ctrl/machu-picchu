@@ -116,7 +116,6 @@
       <input id="datebox" type="text" placeholder="Ir a fecha: 22/08/2026" title="Escribe la fecha con año, ej. 22/08/2026 o 220826. Si no pones año, asume el próximo.">
       <button id="datego" title="Abrir/cerrar día (vacío = hoy)">Día</button>
     </div>
-    <div class="sub" id="updated" style="margin:10px 0 4px"></div>
 
     <h3 style="display:flex;align-items:center;gap:8px">Tipo de ticket <button id="toggleall" title="Plegar / desplegar todos los paneles" style="margin-left:auto;font-size:11px;padding:2px 8px">⇕ Plegar todo</button></h3>
     <div class="master" id="master"><input type="checkbox" id="mchk"><label for="mchk" style="flex:1">Todos los tickets</label><span id="mchkR" title="Resumen por mes de todos">📅 todos</span></div>
@@ -217,6 +216,30 @@ function renderUpdated(){
   el.innerHTML=`<div>${run}</div><div style="color:#ff8f8f;margin-top:3px" title="Estos circuitos+meses no se refrescaron en la última corrida. Corre el robot con la opción 'Solo bloqueados' para completarlos.">⚠ Sin refrescar: ${parts}</div>`;
 }
 
+// frescura por circuito y por ticket, según los sellos conf por mes
+function freshness(){
+  const groups={}, groupFresh={}, routeLag={};
+  DATA.routes.forEach(r=>{(groups[r.group]=groups[r.group]||[]).push(r);});
+  Object.keys(groups).forEach(g=>{
+    let fresh=0;
+    groups[g].forEach(r=>months.forEach(mk=>{
+      if(!Object.keys(r.days||{}).some(k=>k.slice(0,7)===mk))return;
+      const c=r.conf&&r.conf[mk]; if(c){const t=new Date(c).getTime(); if(t>fresh)fresh=t;}
+    }));
+    groupFresh[g]=fresh;
+    groups[g].forEach(r=>{
+      const lag=[];
+      months.forEach(mk=>{
+        if(!Object.keys(r.days||{}).some(k=>k.slice(0,7)===mk))return;
+        const c=r.conf&&r.conf[mk], t=c?new Date(c).getTime():0;
+        if(fresh && (!t || (fresh-t)>2*3.6e6)) lag.push(+mk.slice(5,7));
+      });
+      routeLag[r.id]=lag;
+    });
+  });
+  return {groupFresh, routeLag};
+}
+
 function renderPicker(){
   // master: izq = todos los calendarios, der = 📅 todos (resumen por mes)
   const allL=DATA.routes.length>0 && DATA.routes.every(r=>selected.has(r.id));
@@ -224,6 +247,7 @@ function renderPicker(){
   const mchk=document.getElementById("mchk"); mchk.checked=allL;
   mchk.onchange=()=>{ if(mchk.checked)DATA.routes.forEach(r=>selected.add(r.id)); else selected.clear(); renderPicker();renderBlocks();renderMonthly(); };
   const mr=document.getElementById("mchkR"); if(mr){ mr.style.color=allR?'var(--sel)':''; mr.onclick=()=>{ if(allR)monthSel.clear(); else DATA.routes.forEach(r=>monthSel.add(r.id)); renderPicker();renderBlocks();renderMonthly(); }; }
+  const FR=freshness();
   const p=document.getElementById("picker");p.innerHTML="";let lastG=null;
   DATA.routes.forEach(rt=>{
     if(rt.group!==lastG){
@@ -232,29 +256,13 @@ function renderPicker(){
       const ids=grpRoutes.map(r=>r.id);
       const gOnL=ids.every(id=>selected.has(id));
       const gOnR=ids.every(id=>monthSel.has(id));
-      // frescura del circuito: muestra lo MÁS reciente; si algún mes/ruta quedó viejo, lo especifica
+      // frescura del circuito: edad de lo más reciente, color por antigüedad (verde ≤6h · gris <24h · rojo ≥24h)
       let fr=""; {
-        const NOW=Date.now(), TH=14, abbr=a=>a.slice().sort((x,y)=>x-y).map(m=>MONTHS[m-1].slice(0,3)).join(', ');
-        let freshest=0; const staleByRoute=[];
-        grpRoutes.forEach(r=>{
-          const ms=[];
-          months.forEach(mk=>{
-            if(!Object.keys(r.days||{}).some(k=>k.slice(0,7)===mk))return;
-            const c=r.conf&&r.conf[mk], t=c?new Date(c).getTime():0;
-            if(t>freshest)freshest=t;
-            if(!c||(NOW-t)/3.6e6>=TH)ms.push(+mk.slice(5,7));
-          });
-          if(ms.length)staleByRoute.push({id:r.id,ms});
-        });
-        if(freshest){
-          const fh=(NOW-freshest)/3.6e6, age=fh<1?'<1h':(fh<48?Math.round(fh)+'h':Math.round(fh/24)+'d');
-          if(!staleByRoute.length){ fr=` · <span style="color:#7ee0a3">✓ hace ${age}</span>`; }
-          else{
-            const sig=s=>s.ms.slice().sort((x,y)=>x-y).join(',');
-            const allSame=staleByRoute.length===grpRoutes.length && staleByRoute.every(s=>sig(s)===sig(staleByRoute[0]));
-            const det=allSame?abbr(staleByRoute[0].ms):staleByRoute.map(s=>`${s.id} ${abbr(s.ms)}`).join(' · ');
-            fr=` · hace ${age} <span style="color:#ff8f8f" title="meses sin refrescar (≥${TH}h)">⚠ ${det}</span>`;
-          }
+        const f=FR.groupFresh[rt.group]||0;
+        if(f){
+          const h=(Date.now()-f)/3.6e6, age=h<1?'<1h':(h<48?Math.round(h)+'h':Math.round(h/24)+'d');
+          const col=h<=6?'#7ee0a3':(h<24?'var(--muted)':'#ff8f8f');
+          fr=` <span style="color:${col};font-weight:400;text-transform:none">· hace ${age}</span>`;
         }
       }
       const g=document.createElement("div");g.className="grp";
@@ -264,7 +272,9 @@ function renderPicker(){
       p.appendChild(g);
     }
     const row=document.createElement("div");row.className="opt";
-    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${shortName(rt)}</label><input type="checkbox" class="mchkr" title="Resumen por mes" ${monthSel.has(rt.id)?"checked":""}>`;
+    const lagM=FR.routeLag[rt.id]||[];
+    const note=lagM.length?` <span style="color:#ff8f8f;font-weight:400;font-size:11px" title="meses que no se refrescaron en la última corrida; corre el robot con 'Solo bloqueados'">* no refresco ${lagM.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(', ')}</span>`:"";
+    row.innerHTML=`<input type="checkbox" id="c_${rt.id}" ${selected.has(rt.id)?"checked":""}><label for="c_${rt.id}">${rt.id} · ${shortName(rt)}${note}</label><input type="checkbox" class="mchkr" title="Resumen por mes" ${monthSel.has(rt.id)?"checked":""}>`;
     const ins=row.querySelectorAll("input");
     ins[0].onchange=e=>{e.target.checked?selected.add(rt.id):selected.delete(rt.id);renderPicker();renderBlocks();};
     ins[1].onchange=e=>{e.target.checked?monthSel.add(rt.id):monthSel.delete(rt.id);renderMonthly();};
@@ -333,7 +343,6 @@ function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
     ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles. &nbsp;·&nbsp; <b>I4/I2 (Camino Inca)</b>: 1 salida/día, datos de MachuPicchuAPI."
     :"👀 Datos de muestra para mostrar el formato.";
-  renderUpdated();
   srcBadge();
   if(!months.length){document.getElementById("blocks").innerHTML='<div class="empty">No hay datos cargados.</div>';return;}
   const gm=months[curIdx].split('-').map(Number);
