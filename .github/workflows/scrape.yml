@@ -98,6 +98,9 @@ jobs:
           pattern: slice-*
       - name: Juntar en data.json
         run: node merge.js slices/*/slice.json || true
+      - name: Resumen (qué quedó al día / pendiente)
+        if: always()
+        run: node report.js
       - name: Guardar en el dashboard
         run: |
           git config user.name "github-actions"

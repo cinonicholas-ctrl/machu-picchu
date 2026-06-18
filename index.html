@@ -188,6 +188,34 @@ async function loadData(){
 function srcBadge(){const b=document.getElementById("srcbadge");if(MODE==="real"){b.className="badge real";b.textContent="DATOS REALES";}else if(MODE==="sample-file"){b.className="badge sample";b.textContent="DATOS DE MUESTRA";}else{b.className="badge sample";b.textContent="MUESTRA (vista local)";}}
 function ago(iso){if(!iso)return"";const d=(Date.now()-new Date(iso).getTime())/60000;if(d<2)return"Actualizado: hace un momento";if(d<90)return"Actualizado: hace "+Math.round(d)+" min";return"Actualizado: hace "+Math.round(d/60)+" h";}
 function color(v,cap){if(v<=0)return"var(--zero)";const r=v/cap;if(r>0.55)return"var(--g1)";if(r>0.4)return"var(--g2)";if(r>0.28)return"var(--g3)";if(r>0.18)return"var(--y1)";if(r>0.10)return"var(--o1)";if(r>0.03)return"var(--r1)";return"var(--r2)";}
+// salud de datos: por circuito, qué meses NO se refrescaron (conf más viejo que el umbral)
+function dataHealth(){
+  const now=Date.now(), TH=14; // horas: igual que el pill por bloque
+  const byGroup={}; // "Circuito N" -> Set(mes 1..12 sin refrescar)
+  DATA.routes.forEach(rt=>{
+    if(!rt.group||!rt.group.startsWith('Circuito'))return; // Camino Inca tiene su propio sello aparte
+    months.forEach(mk=>{
+      if(!Object.keys(rt.days||{}).some(k=>k.slice(0,7)===mk))return; // sin datos de ese mes: no evaluar
+      const c=rt.conf&&rt.conf[mk];
+      const h=c?(now-new Date(c).getTime())/3.6e6:Infinity;
+      if(h>=TH)(byGroup[rt.group]=byGroup[rt.group]||new Set()).add(+mk.slice(5,7));
+    });
+  });
+  return byGroup;
+}
+// reloj de arriba: cuándo corrió el robot + aviso claro de qué quedó sin refrescar
+function renderUpdated(){
+  const el=document.getElementById("updated");
+  const run=ago(DATA.updated);
+  if(MODE!=="real"){el.innerHTML=run;return;}
+  const hg=dataHealth(), groups=Object.keys(hg).sort();
+  if(!groups.length){el.innerHTML=`<div>${run}</div><div style="color:#7ee0a3;margin-top:3px">✓ Todos los circuitos al día</div>`;return;}
+  const parts=groups.map(g=>{
+    const ms=[...hg[g]].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(', ');
+    return `${g.replace('Circuito ','C')} (${ms})`;
+  }).join(' · ');
+  el.innerHTML=`<div>${run}</div><div style="color:#ff8f8f;margin-top:3px" title="Estos circuitos+meses no se refrescaron en la última corrida. Corre el robot con la opción 'Solo bloqueados' para completarlos.">⚠ Sin refrescar: ${parts}</div>`;
+}
 
 function renderPicker(){
   // master: izq = todos los calendarios, der = 📅 todos (resumen por mes)
@@ -283,7 +311,7 @@ function renderBlocks(){
   document.getElementById("note").innerHTML=(MODE==="real")
     ?"✅ Datos reales del sitio oficial. 🟢/🟡 por ruta = qué tan fresca está. Un día rayado = agotado; gris = ese horario sin cupo; en color = cupos disponibles. &nbsp;·&nbsp; <b>I4/I2 (Camino Inca)</b>: 1 salida/día, datos de MachuPicchuAPI."
     :"👀 Datos de muestra para mostrar el formato.";
-  document.getElementById("updated").textContent=ago(DATA.updated);
+  renderUpdated();
   srcBadge();
   if(!months.length){document.getElementById("blocks").innerHTML='<div class="empty">No hay datos cargados.</div>';return;}
   const gm=months[curIdx].split('-').map(Number);
