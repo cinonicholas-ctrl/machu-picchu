@@ -63,7 +63,18 @@ jobs:
         with:
           node-version: '20'
       - run: npm install
-      - run: npx playwright install --with-deps chromium
+      - name: Instalar Chromium (blindado contra repos rotos de Microsoft)
+        run: |
+          # Los runners de GitHub traen repos apt de Microsoft (azure-cli, etc.) que a veces
+          # amanecen con firmas rotas y tumban 'playwright install --with-deps'.
+          # No los usamos para nada: fuera, y así apt nunca los toca.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/azure-cli* || true
+          ok=0
+          for i in 1 2 3; do
+            if npx playwright install --with-deps chromium; then ok=1; break; fi
+            echo "intento $i falló, reintento en 20s..."; sleep 20
+          done
+          [ "$ok" = "1" ]
       - name: Recolectar ${{ matrix.combo.c }} / ${{ matrix.combo.m }}
         continue-on-error: true
         env:
