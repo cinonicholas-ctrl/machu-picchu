@@ -1,4 +1,13 @@
-// Robot Machu Picchu — v15 COLECTOR resiliente (merge: nunca borra lo bueno)
+// Robot Machu Picchu — v16 COLECTOR resiliente (merge: nunca borra lo bueno)
+//
+// CAMBIO v16 (2026-08-24): tuboleto.cultura.pe cambio el rotulo del mes del calendario.
+//   Antes decia "AGO 2026" (tres letras + anio). Ahora dice "8/2026" (numero/anio).
+//   parseP() solo entendia el formato de letras -> devolvia null -> navConfirm() nunca
+//   confirmaba un mes -> cada mes contaba como "sin confirmar" -> se escribian rebanadas
+//   VACIAS y el dashboard quedo congelado desde el 2026-08-20 21:22 UTC.
+//   Ahora parseP() entiende los dos formatos (y tambien meses en ingles, porque el sitio
+//   perdio el locale es-PE). Si algun dia aparece un formato nuevo, se loguea el texto
+//   crudo del rotulo para verlo de una en el log de Actions.
 const { chromium } = require('playwright');
 const fs = require('fs');
 
@@ -6,7 +15,7 @@ const URL = `https://tuboleto.cultura.pe/${process.env.TICKET || 'llaqta_machupi
 const CIRCUITS = (process.env.CIRCUITS || 'Circuito 1|Circuito 2|Circuito 3').split('|');
 const MONTHS = parseInt(process.env.MONTHS || '7');
 // MODO REBANADA: si pasamos MONTH=YYYY-MM, raspamos SOLO ese mes y escribimos a OUT.
-// Así cada job (circuito+mes) corre en su propia IP con poca carga. El merge junta todo.
+// Asi cada job (circuito+mes) corre en su propia IP con poca carga. El merge junta todo.
 const OUT = process.env.OUT || 'data.json';
 const MONTH = (process.env.MONTH || '').trim();
 const SLICE = /^\d{4}-\d{2}$/.test(MONTH);
@@ -24,7 +33,11 @@ const INIT = `
 const log = (...a) => console.log(...a);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const pad = (n) => String(n).padStart(2, '0');
-const MAB = { ENE: 0, FEB: 1, MAR: 2, ABR: 3, MAY: 4, JUN: 5, JUL: 6, AGO: 7, SET: 8, SEP: 8, OCT: 9, NOV: 10, DIC: 11 };
+// abreviaturas de mes: espanol Y ingles (el sitio perdio el locale es-PE en agosto 2026)
+const MAB = {
+  ENE: 0, JAN: 0, FEB: 1, MAR: 2, ABR: 3, APR: 3, MAY: 4, JUN: 5,
+  JUL: 6, AGO: 7, AUG: 7, SET: 8, SEP: 8, OCT: 9, NOV: 10, DIC: 11, DEC: 11
+};
 const daysInMonth = (y, mo) => new Date(y, mo + 1, 0).getDate();
 
 // cargar datos previos (para no borrar lo bueno). En modo rebanada NO cargamos prev:
@@ -38,7 +51,7 @@ if (!SLICE) {
 }
 
 (async () => {
-  log('======= v15 resiliente =======', CIRCUITS.join(','), 'meses:', MONTHS);
+  log('======= v16 resiliente =======', CIRCUITS.join(','), 'meses:', MONTHS);
   const t0 = Date.now();
   const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'] });
   const ctx = await browser.newContext({
@@ -57,7 +70,7 @@ if (!SLICE) {
   });
 
   try { await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 }); } catch (e) { log('goto:', e.message); }
-  if (/IP restringida|automatizado/i.test(await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => ''))) { log('⛔ 403 inicio — no escribo nada (conservo lo previo).'); await browser.close(); process.exit(1); }
+  if (/IP restringida|automatizado/i.test(await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => ''))) { log('403 inicio — no escribo nada (conservo lo previo).'); await browser.close(); process.exit(1); }
   let ready = false;
   for (let t = 0; t < 45; t += 3) { if (await page.locator('mat-select').count().catch(() => 0) >= 2) { ready = true; break; } await sleep(3000); }
   if (!ready) { log('no listo — conservo lo previo.'); await browser.close(); process.exit(1); }
@@ -81,7 +94,25 @@ if (!SLICE) {
     return opts.map(s => s.trim()).filter(Boolean);
   }
   const period = () => page.evaluate(() => { const p = document.querySelector('.mat-calendar-period-button'); return p ? p.innerText.trim() : ''; }).catch(() => '');
-  function parseP(s) { const m = s.match(/([A-Z]{3})\.?\s*(\d{4})/i); return m ? { mo: MAB[m[1].toUpperCase()], y: +m[2] } : null; }
+
+  // ---- parseP v16: entiende los formatos que ha usado el sitio ----
+  //   "AGO 2026" / "AGO. 2026" / "AUG 2026"  (letras + anio)
+  //   "8/2026" / "08-2026"                   (mes numerico + anio)  <- el formato de HOY
+  //   "2026/8"                               (anio + mes numerico)
+  let avisoFormato = false;
+  function parseP(s) {
+    s = (s || '').trim();
+    if (!s) return null;
+    let m = s.match(/([A-Za-zÁÉÍÓÚáéíóú]{3})\.?\s*(\d{4})/);
+    if (m) { const mo = MAB[m[1].toUpperCase()]; if (mo != null) return { mo, y: +m[2] }; }
+    m = s.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{4})$/);
+    if (m) { const mo = +m[1] - 1; if (mo >= 0 && mo <= 11) return { mo, y: +m[2] }; }
+    m = s.match(/^(\d{4})\s*[\/\-.]\s*(\d{1,2})$/);
+    if (m) { const mo = +m[2] - 1; if (mo >= 0 && mo <= 11) return { mo, y: +m[1] }; }
+    if (!avisoFormato) { avisoFormato = true; log('OJO: no entiendo el rotulo del mes del calendario. Texto crudo: "' + s + '"'); }
+    return null;
+  }
+
   async function navTo(y, mo) {
     await openCal();
     for (let i = 0; i < 20; i++) {
@@ -100,7 +131,7 @@ if (!SLICE) {
     for (let i = 0; i < 24; i++) {
       const p = parseP(await period());
       if (!p) { await sleep(350); continue; }
-      if (p.y === y && p.mo === mo) return true; // llegamos; la respuesta del mes ya se esperó en el paso anterior
+      if (p.y === y && p.mo === mo) return true; // llegamos; la respuesta del mes ya se espero en el paso anterior
       const fwd = (y > p.y) || (y === p.y && mo > p.mo);
       const b = page.locator(fwd ? '.mat-calendar-next-button' : '.mat-calendar-previous-button').first();
       if (!(await b.count())) return false;
@@ -129,14 +160,16 @@ if (!SLICE) {
   }
 
   const result = { updated: new Date().toISOString(), ticket: process.env.TICKET || 'llaqta_machupicchu', sample: false, routes: [] };
-  // del mes actual hasta diciembre de este año (cada mes que pasa, la corrida es más corta)
+  // del mes actual hasta diciembre de este anio (cada mes que pasa, la corrida es mas corta)
   const now = new Date(); const targets = [];
   if (SLICE) { targets.push({ y: +MONTH.slice(0, 4), mo: +MONTH.slice(5, 7) - 1 }); }
   else { for (let mo = now.getMonth(); mo <= 11; mo++) targets.push({ y: now.getFullYear(), mo }); }
 
+  let totalOk = 0, totalBad = 0;
+
   for (const circuit of CIRCUITS) {
     if (blocked) break;
-    log('\\n#### ' + circuit + ' ####');
+    log('\n#### ' + circuit + ' ####');
     if (!(await pickSelect(0, circuit))) continue;
     const rutas = await optionsOf(1);
     for (const ruta of rutas) {
@@ -155,7 +188,7 @@ if (!SLICE) {
         const confirmed = await navConfirm(y, mo);
         if (!confirmed) { badMonths++; continue; } // mes no confirmado: conservo lo previo
         okMonths++;
-        route.conf[`${y}-${pad(mo + 1)}`] = new Date().toISOString(); // sello: este mes se confirmó AHORA
+        route.conf[`${y}-${pad(mo + 1)}`] = new Date().toISOString(); // sello: este mes se confirmo AHORA
         const en = new Set(await enabledDays());
         for (let d = 1; d <= daysInMonth(y, mo); d++) {
           if (blocked) break;
@@ -170,6 +203,7 @@ if (!SLICE) {
       }
       route.slots = [...slotSet].sort();
       route.mesesOk = okMonths;
+      totalOk += okMonths; totalBad += badMonths;
       result.routes.push(route);
       // escribir merge (incluye rutas previas no tocadas)
       const seen = new Set(result.routes.map(r => r.id));
@@ -184,9 +218,11 @@ if (!SLICE) {
   result.routes = result.routes.concat(Object.values(prev).filter(r => !seen.has(r.id)));
   fs.writeFileSync(OUT, JSON.stringify(result));
   fs.writeFileSync('capture.json', JSON.stringify({ blocked, mins: ((Date.now() - t0) / 60000).toFixed(1), rutas: result.routes.map(r => r.id) }, null, 2));
-  log('\\n💾 data.json (merge). Rutas:', result.routes.map(r => r.id).join(','), '| bloqueado:', blocked, '|', ((Date.now() - t0) / 60000).toFixed(1), 'min');
+  log('\nGuardado. Rutas:', result.routes.map(r => r.id).join(','), '| bloqueado:', blocked, '|', ((Date.now() - t0) / 60000).toFixed(1), 'min');
   await browser.close();
-  log('== fin v15 ==');
-  // si hubo 403, salgo con error: ya no se recupera en esta sesión, mejor que el workflow espere y reintente
-  if (blocked) { log('⛔ 403 detectado — paro aquí para no perder tiempo; el workflow esperará y reintentará.'); process.exit(1); }
+  // alarma clara en el log si no se confirmo NI UN mes (asi fue como se rompio en agosto 2026)
+  if (!blocked && totalOk === 0) log('ALARMA: 0 meses confirmados en toda la corrida. Revisa el rotulo del mes del calendario (parseP).');
+  log('== fin v16 ==');
+  // si hubo 403, salgo con error: ya no se recupera en esta sesion, mejor que el workflow espere y reintente
+  if (blocked) { log('403 detectado — paro aqui para no perder tiempo; el workflow esperara y reintentara.'); process.exit(1); }
 })();
